@@ -253,78 +253,89 @@ class MainActivity : Activity() {
     private fun buildShoppingRows(items: List<ShoppingItem>): List<ShoppingRow> {
         val query = searchQuery.lowercase()
 
-        if (section == Section.LISTE) {
-            // Liste: all Leclerc + Grand Frais items, filtered by search
-            // Grouped by category. Unchecked first, checked (greyed) mixed in
-            // by category — same grouping, checked appear at bottom within group.
-            val filtered = items
-                .filter { it.store == "Leclerc" || it.store == "Grand Frais" }
-                .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
+        when (section) {
 
-            val rows = mutableListOf<ShoppingRow>()
-            val catOrder = categories + listOf(null as String?)
-            val grouped  = filtered.groupBy { it.category }
+            Section.LISTE -> {
+                // All Leclerc + Grand Frais items.
+                // planned=false → unchecked (still to plan)
+                // planned=true  → greyed out (already in store list)
+                // Sorted: unchecked first within each category, planned at bottom
+                val filtered = items
+                    .filter { it.store == "Leclerc" || it.store == "Grand Frais" }
+                    .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
 
-            for (cat in catOrder) {
-                val group = grouped[cat] ?: continue
-                val label = cat ?: getString(R.string.category_none)
-                // unchecked first, then checked within same category header
-                val unchecked = group.filter { !it.checked }.sortedBy { it.name }
-                val checked   = group.filter {  it.checked }.sortedBy { it.name }
-                if (unchecked.isEmpty() && checked.isEmpty()) continue
-                rows.add(ShoppingRow.Header(label))
-                unchecked.forEach { rows.add(ShoppingRow.Item(it)) }
-                checked.forEach   { rows.add(ShoppingRow.Item(it)) }
-            }
-            // unknown categories
-            for ((cat, group) in grouped) {
-                if (cat != null && cat !in categories) {
-                    rows.add(ShoppingRow.Header(cat))
-                    group.filter { !it.checked }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
-                    group.filter {  it.checked }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                val rows     = mutableListOf<ShoppingRow>()
+                val catOrder = categories + listOf(null as String?)
+                val grouped  = filtered.groupBy { it.category }
+
+                for (cat in catOrder) {
+                    val group = grouped[cat] ?: continue
+                    val unplanned = group.filter { !it.planned }.sortedBy { it.name }
+                    val planned   = group.filter {  it.planned }.sortedBy { it.name }
+                    if (unplanned.isEmpty() && planned.isEmpty()) continue
+                    rows.add(ShoppingRow.Header(cat ?: getString(R.string.category_none)))
+                    unplanned.forEach { rows.add(ShoppingRow.Item(it)) }
+                    planned.forEach   { rows.add(ShoppingRow.Item(it)) }
                 }
+                // Unknown categories
+                for ((cat, group) in grouped) {
+                    if (cat != null && cat !in categories) {
+                        rows.add(ShoppingRow.Header(cat))
+                        group.filter { !it.planned }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                        group.filter {  it.planned }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                    }
+                }
+                return rows
             }
-            return rows
-        }
 
-        val store = currentStore()
-        val filtered = items
-            .filter { it.store == store }
-            .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
+            Section.LECLERC, Section.GRAND_FRAIS -> {
+                // Only items where planned=true for this store.
+                // checked=false → normal; checked=true → strikethrough ("Done" section)
+                val store = currentStore()
+                val filtered = items
+                    .filter { it.store == store && it.planned }
+                    .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
 
-        if (store == "Autre") {
-            val rows = mutableListOf<ShoppingRow>()
-            filtered.filter { !it.checked }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
-            val checked = filtered.filter { it.checked }.sortedBy { it.name }
-            if (checked.isNotEmpty()) {
-                rows.add(ShoppingRow.Header("✓ Done"))
-                checked.forEach { rows.add(ShoppingRow.Item(it)) }
+                val unchecked = filtered.filter { !it.checked }
+                val checked   = filtered.filter {  it.checked }
+                val rows      = mutableListOf<ShoppingRow>()
+                val catOrder  = categories + listOf(null as String?)
+                val grouped   = unchecked.groupBy { it.category }
+
+                for (cat in catOrder) {
+                    val group = grouped[cat] ?: continue
+                    rows.add(ShoppingRow.Header(cat ?: getString(R.string.category_none)))
+                    group.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                }
+                for ((cat, group) in grouped) {
+                    if (cat != null && cat !in categories) {
+                        rows.add(ShoppingRow.Header(cat))
+                        group.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                    }
+                }
+                if (checked.isNotEmpty()) {
+                    rows.add(ShoppingRow.Header("✓ Done"))
+                    checked.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                }
+                return rows
             }
-            return rows
-        }
 
-        // Leclerc / Grand Frais: grouped by category
-        val unchecked = filtered.filter { !it.checked }
-        val checked   = filtered.filter {  it.checked }
-        val rows = mutableListOf<ShoppingRow>()
-        val catOrder = categories + listOf(null as String?)
-        val grouped  = unchecked.groupBy { it.category }
-        for (cat in catOrder) {
-            val group = grouped[cat] ?: continue
-            rows.add(ShoppingRow.Header(cat ?: getString(R.string.category_none)))
-            group.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
-        }
-        for ((cat, group) in grouped) {
-            if (cat != null && cat !in categories) {
-                rows.add(ShoppingRow.Header(cat))
-                group.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+            Section.AUTRE -> {
+                val filtered = items
+                    .filter { it.store == "Autre" }
+                    .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
+                val rows = mutableListOf<ShoppingRow>()
+                filtered.filter { !it.checked }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                val checked = filtered.filter { it.checked }.sortedBy { it.name }
+                if (checked.isNotEmpty()) {
+                    rows.add(ShoppingRow.Header("✓ Done"))
+                    checked.forEach { rows.add(ShoppingRow.Item(it)) }
+                }
+                return rows
             }
+
+            else -> return emptyList()
         }
-        if (checked.isNotEmpty()) {
-            rows.add(ShoppingRow.Header("✓ Done"))
-            checked.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
-        }
-        return rows
     }
 
     private fun renderShopping() {
@@ -353,8 +364,10 @@ class MainActivity : Activity() {
         }
 
         val isListe     = section == Section.LISTE
+        val isStoreList = section == Section.LECLERC || section == Section.GRAND_FRAIS
         val TYPE_HEADER = 0
         val TYPE_ITEM   = 1
+
         listView.adapter = object : android.widget.BaseAdapter() {
             override fun getCount() = cleaned.size
             override fun getItem(pos: Int) = cleaned[pos]
@@ -378,33 +391,73 @@ class MainActivity : Activity() {
                         val del = v.findViewById<ImageButton>(R.id.btnDeleteItem)
 
                         cb.setOnCheckedChangeListener(null)
-                        cb.isChecked = s.checked
 
-                        // In Liste: show store badge alongside item name
-                        tv.text = if (isListe) {
-                            val badge = if (s.store == "Grand Frais") " [GF]" else " [L]"
-                            s.name + badge
-                        } else {
-                            s.name
+                        when {
+                            isListe -> {
+                                // checkbox reflects planned state
+                                cb.isChecked = s.planned
+                                val badge = if (s.store == "Grand Frais") " [GF]" else " [L]"
+                                tv.text = s.name + badge
+                                if (s.planned) {
+                                    tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                                    tv.setTextColor(getColor(R.color.muted))
+                                } else {
+                                    tv.paintFlags = tv.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                                    tv.setTextColor(getColor(R.color.text_primary))
+                                }
+                                cb.setOnCheckedChangeListener { _, planned ->
+                                    // Toggling planned; if un-planning also uncheck
+                                    val updated = s.copy(
+                                        planned   = planned,
+                                        checked   = if (!planned) false else s.checked,
+                                        updatedAt = System.currentTimeMillis()
+                                    )
+                                    shopping = shopping.map { if (it.id == s.id) updated else it }
+                                    Prefs.saveShopping(this@MainActivity, shopping)
+                                    renderShopping()
+                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                }
+                            }
+                            isStoreList -> {
+                                // checkbox reflects checked (picked up) state
+                                cb.isChecked = s.checked
+                                tv.text = s.name
+                                if (s.checked) {
+                                    tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                                    tv.setTextColor(getColor(R.color.muted))
+                                } else {
+                                    tv.paintFlags = tv.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                                    tv.setTextColor(getColor(R.color.text_primary))
+                                }
+                                cb.setOnCheckedChangeListener { _, checked ->
+                                    val updated = s.copy(checked = checked, updatedAt = System.currentTimeMillis())
+                                    shopping = shopping.map { if (it.id == s.id) updated else it }
+                                    Prefs.saveShopping(this@MainActivity, shopping)
+                                    renderShopping()
+                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                }
+                            }
+                            else -> { // Autre
+                                cb.isChecked = s.checked
+                                tv.text = s.name
+                                if (s.checked) {
+                                    tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                                    tv.setTextColor(getColor(R.color.muted))
+                                } else {
+                                    tv.paintFlags = tv.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                                    tv.setTextColor(getColor(R.color.text_primary))
+                                }
+                                cb.setOnCheckedChangeListener { _, checked ->
+                                    val updated = s.copy(checked = checked, updatedAt = System.currentTimeMillis())
+                                    shopping = shopping.map { if (it.id == s.id) updated else it }
+                                    Prefs.saveShopping(this@MainActivity, shopping)
+                                    renderShopping()
+                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                }
+                            }
                         }
 
-                        if (s.checked) {
-                            tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
-                            tv.setTextColor(getColor(R.color.muted))
-                        } else {
-                            tv.paintFlags = tv.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
-                            tv.setTextColor(getColor(R.color.text_primary))
-                        }
-
-                        cb.setOnCheckedChangeListener { _, checked ->
-                            val updated = s.copy(checked = checked, updatedAt = System.currentTimeMillis())
-                            shopping = shopping.map { if (it.id == s.id) updated else it }
-                            Prefs.saveShopping(this@MainActivity, shopping)
-                            renderShopping()
-                            Thread { Api.updateShoppingItem(updated) }.start()
-                        }
-
-                        // Delete button only for Autre items
+                        // Delete button only for Autre
                         del.visibility = if (s.store == "Autre") View.VISIBLE else View.GONE
                         del.setOnClickListener {
                             shopping = shopping.filter { it.id != s.id }
@@ -414,11 +467,8 @@ class MainActivity : Activity() {
                         }
 
                         v.setOnLongClickListener {
-                            when {
-                                s.store == "Autre"  -> showRenameDialog(s)
-                                isListe             -> showChangeStoreDialog(s)
-                                else                -> showChangeStoreDialog(s)
-                            }
+                            if (s.store == "Autre") showRenameDialog(s)
+                            else showChangeStoreDialog(s)
                             true
                         }
                         v
@@ -430,6 +480,12 @@ class MainActivity : Activity() {
 
     // ── Shopping actions ──────────────────────────────────────────────────────
 
+    /**
+     * Clear checked items:
+     * - Leclerc / Grand Frais: uncheck AND un-plan all checked items
+     *   → they disappear from the store list and reappear unchecked in Liste
+     * - Autre: delete all checked items
+     */
     private fun clearChecked() {
         val store = currentStore()
         val checked = shopping.filter { it.store == store && it.checked }
@@ -441,12 +497,11 @@ class MainActivity : Activity() {
             renderShopping()
             Thread { checked.forEach { Api.deleteShoppingItem(it.id) } }.start()
         } else {
-            // Leclerc / Grand Frais: uncheck (item goes back to unchecked in Liste)
-            val unchecked = checked.map { it.copy(checked = false, updatedAt = System.currentTimeMillis()) }
-            shopping = shopping.map { item -> unchecked.firstOrNull { it.id == item.id } ?: item }
+            val reset = checked.map { it.copy(checked = false, planned = false, updatedAt = System.currentTimeMillis()) }
+            shopping = shopping.map { item -> reset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
             renderShopping()
-            Thread { unchecked.forEach { Api.updateShoppingItem(it) } }.start()
+            Thread { reset.forEach { Api.updateShoppingItem(it) } }.start()
         }
     }
 
@@ -472,7 +527,6 @@ class MainActivity : Activity() {
         var spinnerStore: Spinner? = null
 
         if (!isAutre) {
-            // Category spinner
             val tvCatLabel = TextView(this).apply {
                 text = getString(R.string.label_categories)
                 setTextColor(getColor(R.color.text_secondary))
@@ -487,7 +541,6 @@ class MainActivity : Activity() {
             layout.addView(tvCatLabel)
             layout.addView(spinnerCat)
 
-            // Store spinner — shown in Liste (ambiguous store) or always for clarity
             if (isListe) {
                 val tvStoreLabel = TextView(this).apply {
                     text = "Magasin"
@@ -496,10 +549,9 @@ class MainActivity : Activity() {
                     setPadding(0, 16, 0, 4)
                 }
                 spinnerStore = Spinner(this)
-                val storeOptions = listOf("Leclerc", "Grand Frais")
-                spinnerStore.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, storeOptions).also {
-                    it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                }
+                spinnerStore.adapter = ArrayAdapter(
+                    this, android.R.layout.simple_spinner_item, listOf("Leclerc", "Grand Frais")
+                ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
                 layout.addView(tvStoreLabel)
                 layout.addView(spinnerStore)
             }
@@ -516,9 +568,9 @@ class MainActivity : Activity() {
                 val cat = if (isAutre || sc == null || sc.selectedItemPosition == 0) null
                           else categories[sc.selectedItemPosition - 1]
                 val store = when {
-                    isAutre             -> "Autre"
+                    isAutre              -> "Autre"
                     isListe && ss != null -> listOf("Leclerc", "Grand Frais")[ss.selectedItemPosition]
-                    else                -> currentStore()
+                    else                 -> currentStore()
                 }
                 createShoppingItem(itemName, cat, store)
                 etNewItem.setText("")
@@ -577,6 +629,7 @@ class MainActivity : Activity() {
             id        = java.util.UUID.randomUUID().toString(),
             name      = name,
             checked   = false,
+            planned   = false,
             category  = category,
             store     = store,
             updatedAt = System.currentTimeMillis()

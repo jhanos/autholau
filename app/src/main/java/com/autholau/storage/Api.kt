@@ -170,6 +170,7 @@ object Api {
         put("id",        s.id)
         put("name",      s.name)
         put("checked",   s.checked)
+        put("planned",   s.planned)
         if (s.category != null) put("category", s.category)
         put("store",     s.store)
         put("updatedAt", s.updatedAt)
@@ -179,6 +180,7 @@ object Api {
         id        = o.getString("id"),
         name      = o.getString("name"),
         checked   = o.optBoolean("checked", false),
+        planned   = o.optBoolean("planned", false),
         category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
         store     = o.optString("store", "Leclerc").ifEmpty { "Leclerc" },
         updatedAt = o.optLong("updatedAt", 0L)
