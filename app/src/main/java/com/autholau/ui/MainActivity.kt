@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var etNewItem:        EditText
     private lateinit var btnAdd:           ImageButton
     private lateinit var btnClearChecked:  ImageButton
+    private lateinit var btnRefresh:       ImageButton
 
     // Data
     private var events:     List<Event>        = emptyList()
@@ -63,7 +64,8 @@ class MainActivity : Activity() {
         btnClearChecked  = findViewById(R.id.btnClearChecked)
 
         findViewById<ImageButton>(R.id.btnDrawer).setOnClickListener { toggleDrawer() }
-        findViewById<ImageButton>(R.id.btnRefresh).setOnClickListener { refresh() }
+        btnRefresh = findViewById(R.id.btnRefresh)
+        btnRefresh.setOnClickListener { refresh() }
         btnClearChecked.setOnClickListener { clearChecked() }
         btnAdd.setOnClickListener { onAdd() }
 
@@ -218,8 +220,9 @@ class MainActivity : Activity() {
         Prefs.saveShopping(this, shopping)
         renderShopping()
         Thread {
-            Api.updateShoppingItem(updated)
-            updatedSibling?.let { Api.updateShoppingItem(it) }
+            val ok1 = Api.updateShoppingItem(updated)
+            val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+            if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
         }.start()
     }
 
@@ -497,8 +500,9 @@ class MainActivity : Activity() {
                                     Prefs.saveShopping(this@MainActivity, shopping)
                                     renderShopping()
                                     Thread {
-                                        Api.updateShoppingItem(updatedPrimary)
-                                        updatedSibling?.let { Api.updateShoppingItem(it) }
+                                        val ok1 = Api.updateShoppingItem(updatedPrimary)
+                                        val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+                                        if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
                                     }.start()
                                 }
                             }
@@ -536,7 +540,10 @@ class MainActivity : Activity() {
                                     shopping = shopping.map { if (it.id == s.id) updated else it }
                                     Prefs.saveShopping(this@MainActivity, shopping)
                                     renderShopping()
-                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                    Thread {
+                                        val ok = Api.updateShoppingItem(updated)
+                                        if (ok == null) showSyncError()
+                                    }.start()
                                 }
                             }
                         }
@@ -546,7 +553,10 @@ class MainActivity : Activity() {
                             shopping = shopping.filter { it.id != s.id }
                             Prefs.saveShopping(this@MainActivity, shopping)
                             renderShopping()
-                            Thread { Api.deleteShoppingItem(s.id) }.start()
+                            Thread {
+                                val ok = Api.deleteShoppingItem(s.id)
+                                if (!ok) showSyncError()
+                            }.start()
                         }
 
                         v.setOnLongClickListener {
@@ -572,7 +582,10 @@ class MainActivity : Activity() {
             shopping = shopping.filter { !(it.store == store && it.checked) }
             Prefs.saveShopping(this, shopping)
             renderShopping()
-            Thread { checked.forEach { Api.deleteShoppingItem(it.id) } }.start()
+            Thread { checked.forEach { item ->
+                val ok = Api.deleteShoppingItem(item.id)
+                if (!ok) showSyncError()
+            } }.start()
         } else {
             // Reset checked items and their siblings (planned=false, checked=false)
             val ts = System.currentTimeMillis()
@@ -587,7 +600,10 @@ class MainActivity : Activity() {
             shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
             renderShopping()
-            Thread { toReset.forEach { Api.updateShoppingItem(it) } }.start()
+            Thread { toReset.forEach { item ->
+                val ok = Api.updateShoppingItem(item)
+                if (ok == null) showSyncError()
+            } }.start()
         }
     }
 
@@ -731,7 +747,10 @@ class MainActivity : Activity() {
                 shopping = shopping.map { if (it.id == item.id) updated else it }
                 Prefs.saveShopping(this, shopping)
                 renderShopping()
-                Thread { Api.updateShoppingItem(updated) }.start()
+                Thread {
+                    val ok = Api.updateShoppingItem(updated)
+                    if (ok == null) showSyncError()
+                }.start()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -750,7 +769,10 @@ class MainActivity : Activity() {
                 shopping = shopping.map { if (it.id == item.id) updated else it }
                 Prefs.saveShopping(this, shopping)
                 renderShopping()
-                Thread { Api.updateShoppingItem(updated) }.start()
+                Thread {
+                    val ok = Api.updateShoppingItem(updated)
+                    if (ok == null) showSyncError()
+                }.start()
             }
             .show()
     }
@@ -773,6 +795,8 @@ class MainActivity : Activity() {
             if (created != null) {
                 shopping = shopping.map { if (it.id == item.id) created else it }
                 Prefs.saveShopping(this, shopping)
+            } else {
+                showSyncError()
             }
         }.start()
     }
@@ -781,12 +805,21 @@ class MainActivity : Activity() {
 
     private fun onAdd() { startActivity(Intent(this, EventFormActivity::class.java)) }
 
+    private fun showSyncError() = runOnUiThread {
+        Toast.makeText(this, getString(R.string.err_sync), Toast.LENGTH_SHORT).show()
+    }
+
     private fun refresh() {
+        btnRefresh.isEnabled = false
         Thread {
             val newEvents     = Api.getEvents()
             val newShopping   = Api.getShopping()
             val newCategories = Api.getCategories()
             runOnUiThread {
+                btnRefresh.isEnabled = true
+                if (newEvents == null && newShopping == null && newCategories == null) {
+                    Toast.makeText(this, getString(R.string.err_network), Toast.LENGTH_SHORT).show()
+                }
                 if (newEvents != null) {
                     events = newEvents
                     Prefs.saveEvents(this, events)

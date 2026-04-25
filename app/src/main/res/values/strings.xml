@@ -36,7 +36,8 @@
     <string name="empty_shopping">Shopping list is empty</string>
     <string name="err_connect">Cannot reach server</string>
     <string name="err_login">Wrong password</string>
-    <string name="err_network">Network error</string>
+    <string name="err_network">Impossible de joindre le serveur</string>
+    <string name="err_sync">Erreur de sync — modification sauvegardée localement</string>
     <string name="err_empty_title">Title cannot be empty</string>
     <string name="err_empty_date">Date cannot be empty</string>
 </resources>
