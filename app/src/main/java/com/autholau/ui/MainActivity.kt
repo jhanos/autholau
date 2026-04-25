@@ -182,7 +182,7 @@ class MainActivity : Activity() {
                 val tvT = row.findViewById<TextView>(R.id.tvEventTitle)
                 val tvD = row.findViewById<TextView>(R.id.tvEventDate)
                 tvT.text = e.title
-                tvD.text = e.date
+                tvD.text = formatEventDate(d, e.date, e.time, today)
 
                 val col = if (muted) getColor(R.color.muted) else getColor(R.color.text_primary)
                 tvT.setTextColor(col)
@@ -195,6 +195,20 @@ class MainActivity : Activity() {
                 }
                 return row
             }
+        }
+    }
+
+    private fun formatEventDate(d: LocalDate?, rawDate: String, time: String?, today: LocalDate): String {
+        if (d == null) return rawDate
+        val days = java.time.temporal.ChronoUnit.DAYS.between(today, d).toInt()
+        val dayName = d.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+            .replaceFirstChar { it.uppercase() }
+        val timeSuffix = if (time != null) " · $time" else ""
+        return when {
+            days == 0  -> "Today$timeSuffix"
+            days == 1  -> "Tomorrow$timeSuffix"
+            days > 1   -> "$rawDate · $dayName · +${days}d$timeSuffix"
+            else       -> rawDate
         }
     }
 
