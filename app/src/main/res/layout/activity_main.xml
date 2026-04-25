@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FrameLayout: content behind, drawer panel on top (toggled programmatically) -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <!-- Main content -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Toolbar row -->
+        <LinearLayout
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@color/surface"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp"
+            android:elevation="4dp">
+
+            <ImageButton
+                android:id="@+id/btnDrawer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_menu"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Menu"/>
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="20sp"
+                android:textColor="@color/text_primary"
+                android:paddingStart="8dp"
+                android:text="@string/nav_events"/>
+
+            <ImageButton
+                android:id="@+id/btnRefresh"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_popup_sync"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Refresh"/>
+
+            <ImageButton
+                android:id="@+id/btnAdd"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_add"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Add"/>
+        </LinearLayout>
+
+        <!-- Shopping inline-add row -->
+        <LinearLayout
+            android:id="@+id/rowShoppingInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:background="@color/surface"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/etNewItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/hint_item_name"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:backgroundTint="@color/primary"
+                android:inputType="textCapSentences"
+                android:imeOptions="actionDone"/>
+
+            <ImageButton
+                android:id="@+id/btnAddItem"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_add"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Add item"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="32dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:text="@string/empty_events"
+            android:visibility="gone"/>
+
+        <ListView
+            android:id="@+id/listView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@color/divider"
+            android:dividerHeight="1dp"
+            android:listSelector="?android:attr/selectableItemBackground"
+            android:scrollbarStyle="outsideOverlay"
+            android:background="@color/bg"/>
+    </LinearLayout>
+
+    <!-- Scrim (dim overlay, click to close drawer) -->
+    <View
+        android:id="@+id/scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99000000"
+        android:visibility="gone"/>
+
+    <!-- Drawer panel (slides in from left) -->
+    <LinearLayout
+        android:id="@+id/drawerPanel"
+        android:layout_width="280dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:orientation="vertical"
+        android:background="@color/surface"
+        android:translationX="-800dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="22sp"
+            android:textColor="@color/text_primary"
+            android:padding="24dp"
+            android:background="@color/bg"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider"/>
+
+        <TextView
+            android:id="@+id/navEvents"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/nav_events"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:background="?android:attr/selectableItemBackground"/>
+
+        <TextView
+            android:id="@+id/navShopping"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/nav_shopping"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:background="?android:attr/selectableItemBackground"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider"/>
+
+        <TextView
+            android:id="@+id/navSettings"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/nav_settings"
+            android:textColor="@color/text_secondary"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:background="?android:attr/selectableItemBackground"/>
+
+        <TextView
+            android:id="@+id/navLogout"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/action_logout"
+            android:textColor="@color/danger"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:background="?android:attr/selectableItemBackground"/>
+    </LinearLayout>
+</FrameLayout>

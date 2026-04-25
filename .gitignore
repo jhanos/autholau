@@ -1,0 +1,44 @@
+# Gradle
+.gradle/
+build/
+**/build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Kotlin
+*.class
+
+# APKs / signing
+*.apk
+*.aab
+*.jks
+*.keystore
+!app/proguard-rules.pro
+
+# Environment / secrets
+.env
+server/.env
+*.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+server/.venv/
+server/venv/
+*.egg-info/
+
+# uv
+uv.lock
+
+# Data files (server runtime)
+server/data/*.json
+
+# OS
+.DS_Store
+Thumbs.db
