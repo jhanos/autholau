@@ -8,16 +8,23 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object Prefs {
-    const val NAME           = "autholau"
-    const val SERVER_URL     = "server_url"
-    const val TOKEN          = "token"
-    const val FIRST_LAUNCH   = "first_launch"
-    const val NOTIF_LEAD     = "notif_lead_days"
-    const val EVENTS_CACHE   = "events_cache"
-    const val SHOPPING_CACHE = "shopping_cache"
+    const val NAME              = "autholau"
+    const val SERVER_URL        = "server_url"
+    const val TOKEN             = "token"
+    const val FIRST_LAUNCH      = "first_launch"
+    const val NOTIF_LEAD        = "notif_lead_days"
+    const val EVENTS_CACHE      = "events_cache"
+    const val SHOPPING_CACHE    = "shopping_cache"
+    const val CATEGORIES_CACHE  = "categories_cache"
 
-    const val DEFAULT_URL    = "https://famille.thonis.fr"
-    const val DEFAULT_LEAD   = 7
+    const val DEFAULT_URL  = "https://famille.thonis.fr"
+    const val DEFAULT_LEAD = 7
+
+    val DEFAULT_CATEGORIES = listOf(
+        "Maison", "Féculents", "Condiments", "Petit Dej",
+        "Viandes/Poissons", "Laitage", "Fruits/Légumes",
+        "Hygiène/Beauté", "Surgelés"
+    )
 
     fun get(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -93,6 +100,7 @@ object Prefs {
                 put("id",        s.id)
                 put("name",      s.name)
                 put("checked",   s.checked)
+                if (s.category != null) put("category", s.category)
                 put("updatedAt", s.updatedAt)
             })
         }
@@ -109,9 +117,26 @@ object Prefs {
                     id        = o.getString("id"),
                     name      = o.getString("name"),
                     checked   = o.optBoolean("checked", false),
+                    category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
                     updatedAt = o.optLong("updatedAt", 0L)
                 )
             }
         } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Categories cache ──────────────────────────────────────────────────────
+
+    fun saveCategories(ctx: Context, cats: List<String>) {
+        val arr = JSONArray()
+        cats.forEach { arr.put(it) }
+        get(ctx).edit().putString(CATEGORIES_CACHE, arr.toString()).apply()
+    }
+
+    fun loadCategories(ctx: Context): List<String> {
+        val raw = get(ctx).getString(CATEGORIES_CACHE, null) ?: return DEFAULT_CATEGORIES
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        } catch (_: Exception) { DEFAULT_CATEGORIES }
     }
 }

@@ -4,6 +4,18 @@ from typing import Any
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
+DEFAULT_CATEGORIES = [
+    "Maison",
+    "Féculents",
+    "Condiments",
+    "Petit Dej",
+    "Viandes/Poissons",
+    "Laitage",
+    "Fruits/Légumes",
+    "Hygiène/Beauté",
+    "Surgelés",
+]
+
 
 def _path(filename: str) -> str:
     return os.path.join(DATA_DIR, filename)
@@ -106,4 +118,38 @@ def delete_shopping_item(item_id: str) -> bool:
     if len(new_items) == len(items):
         return False
     _write("shopping.json", new_items)
+    return True
+
+
+# --- Categories ---
+
+def get_categories() -> list[str]:
+    path = _path("categories.json")
+    if not os.path.exists(path):
+        # Seed defaults on first access
+        _write("categories.json", DEFAULT_CATEGORIES)
+        return list(DEFAULT_CATEGORIES)
+    with open(path, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return list(DEFAULT_CATEGORIES)
+
+
+def create_category(name: str) -> bool:
+    """Returns False if already exists."""
+    cats = get_categories()
+    if name in cats:
+        return False
+    cats.append(name)
+    _write("categories.json", cats)
+    return True
+
+
+def delete_category(name: str) -> bool:
+    cats = get_categories()
+    if name not in cats:
+        return False
+    cats = [c for c in cats if c != name]
+    _write("categories.json", cats)
     return True

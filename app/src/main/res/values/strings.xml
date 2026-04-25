@@ -18,6 +18,11 @@
     <string name="label_server_url">Server URL</string>
     <string name="label_notif_lead">Notify N days before</string>
     <string name="hint_item_name">Item name</string>
+    <string name="hint_search_add">Search or add…</string>
+    <string name="label_categories">Categories</string>
+    <string name="hint_new_category">New category…</string>
+    <string name="action_add_category">Add</string>
+    <string name="category_none">No category</string>
     <string name="btn_login">Connect</string>
     <string name="btn_save_settings">Save</string>
     <string name="setup_title">Server Setup</string>

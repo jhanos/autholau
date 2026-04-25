@@ -128,6 +128,36 @@ def delete_shopping_item(item_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Categories
+# ---------------------------------------------------------------------------
+
+@app.route("/categories", methods=["GET"])
+@auth.require_auth
+def list_categories():
+    return jsonify(storage.get_categories()), 200
+
+
+@app.route("/categories", methods=["POST"])
+@auth.require_auth
+def create_category():
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Missing name"}), 400
+    if not storage.create_category(name):
+        return jsonify({"error": "Category already exists"}), 409
+    return jsonify({"name": name}), 201
+
+
+@app.route("/categories/<path:name>", methods=["DELETE"])
+@auth.require_auth
+def delete_category(name: str):
+    if not storage.delete_category(name):
+        return jsonify({"error": "Category not found"}), 404
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

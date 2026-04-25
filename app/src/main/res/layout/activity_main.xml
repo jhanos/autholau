@@ -50,6 +50,15 @@
                 android:contentDescription="Refresh"/>
 
             <ImageButton
+                android:id="@+id/btnClearChecked"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Clear checked"
+                android:visibility="gone"/>
+
+            <ImageButton
                 android:id="@+id/btnAdd"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
@@ -73,7 +82,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="@string/hint_item_name"
+                android:hint="@string/hint_search_add"
                 android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary"
                 android:backgroundTint="@color/primary"

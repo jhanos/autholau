@@ -121,6 +121,26 @@ object Api {
         delete("shopping/$id") in 200..299
     } catch (_: Exception) { false }
 
+    // ── Categories ────────────────────────────────────────────────────────────
+
+    fun getCategories(): List<String>? = try {
+        val (code, body) = get("categories")
+        if (code == 200) {
+            val arr = org.json.JSONArray(body)
+            (0 until arr.length()).map { arr.getString(it) }
+        } else null
+    } catch (_: Exception) { null }
+
+    fun createCategory(name: String): Boolean = try {
+        val (code, _) = post("categories", JSONObject().put("name", name))
+        code == 201
+    } catch (_: Exception) { false }
+
+    fun deleteCategory(name: String): Boolean = try {
+        val encoded = java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")
+        delete("categories/$encoded") in 200..299
+    } catch (_: Exception) { false }
+
     // ── JSON helpers ──────────────────────────────────────────────────────────
 
     private fun eventToJson(e: Event) = JSONObject().apply {
@@ -150,6 +170,7 @@ object Api {
         put("id",        s.id)
         put("name",      s.name)
         put("checked",   s.checked)
+        if (s.category != null) put("category", s.category)
         put("updatedAt", s.updatedAt)
     }
 
@@ -157,6 +178,7 @@ object Api {
         id        = o.getString("id"),
         name      = o.getString("name"),
         checked   = o.optBoolean("checked", false),
+        category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
         updatedAt = o.optLong("updatedAt", 0L)
     )
 
