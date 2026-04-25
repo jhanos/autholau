@@ -83,13 +83,11 @@
             android:letterSpacing="0.1"
             android:layout_marginBottom="8dp"/>
 
-        <ListView
+        <LinearLayout
             android:id="@+id/listCategories"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:divider="@color/divider"
-            android:dividerHeight="1dp"
-            android:nestedScrollingEnabled="false"
+            android:orientation="vertical"
             android:layout_marginBottom="16dp"/>
 
         <LinearLayout

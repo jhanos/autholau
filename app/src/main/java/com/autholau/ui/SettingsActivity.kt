@@ -3,7 +3,6 @@ package com.autholau.ui
 import android.app.Activity
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import com.autholau.R
 import com.autholau.storage.Api
@@ -14,7 +13,7 @@ class SettingsActivity : Activity() {
     private val leadOptions = intArrayOf(1, 3, 7, 14, 30)
     private val leadLabels  = arrayOf("1 day", "3 days", "1 week", "2 weeks", "1 month")
 
-    private lateinit var listCategories: ListView
+    private lateinit var listCategories: LinearLayout
     private lateinit var etNewCategory:  EditText
     private lateinit var tvCatError:     TextView
     private var categories: MutableList<String> = mutableListOf()
@@ -75,19 +74,22 @@ class SettingsActivity : Activity() {
     }
 
     private fun renderCategories() {
-        listCategories.adapter = object : ArrayAdapter<String>(this, 0, categories) {
-            override fun getView(pos: Int, convert: View?, parent: ViewGroup): View {
-                val row = convert ?: layoutInflater.inflate(R.layout.row_category, parent, false)
-                val name = getItem(pos)!!
-                row.findViewById<TextView>(R.id.tvCategoryName).text = name
-                row.findViewById<ImageButton>(R.id.btnDeleteCategory).setOnClickListener {
-                    deleteCategory(name)
-                }
-                return row
+        listCategories.removeAllViews()
+        categories.forEachIndexed { index, name ->
+            val row = layoutInflater.inflate(R.layout.row_category, listCategories, false)
+            row.findViewById<TextView>(R.id.tvCategoryName).text = name
+            row.findViewById<ImageButton>(R.id.btnDeleteCategory).setOnClickListener {
+                deleteCategory(name)
             }
+            // divider between rows
+            if (index > 0) {
+                val divider = View(this)
+                divider.setBackgroundColor(getColor(R.color.divider))
+                val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
+                listCategories.addView(divider, lp)
+            }
+            listCategories.addView(row)
         }
-        // Fix ListView height inside ScrollView
-        setListViewHeightBasedOnItems(listCategories)
     }
 
     private fun addCategory() {
@@ -116,22 +118,5 @@ class SettingsActivity : Activity() {
             Api.deleteCategory(name)
         }.start()
     }
-
-    // Makes a ListView inside a ScrollView show all its items without scrolling
-    private fun setListViewHeightBasedOnItems(lv: ListView) {
-        val adapter = lv.adapter ?: return
-        var totalHeight = 0
-        for (i in 0 until adapter.count) {
-            val item = adapter.getView(i, null, lv)
-            item.measure(
-                View.MeasureSpec.makeMeasureSpec(lv.width, View.MeasureSpec.AT_MOST),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-            totalHeight += item.measuredHeight
-        }
-        val params = lv.layoutParams
-        params.height = totalHeight + (lv.dividerHeight * (adapter.count - 1))
-        lv.layoutParams = params
-        lv.requestLayout()
-    }
 }
+
