@@ -158,6 +158,20 @@ def delete_category(name: str):
 
 
 # ---------------------------------------------------------------------------
+# Admin
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/reseed", methods=["POST"])
+def admin_reseed():
+    """Reset categories and shopping list to defaults. Requires family password."""
+    data = request.get_json(silent=True) or {}
+    if data.get("password") != FAMILY_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+    storage.reseed()
+    return jsonify({"status": "reseeded"}), 200
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

@@ -21,7 +21,7 @@ object Prefs {
     const val DEFAULT_LEAD = 7
 
     val DEFAULT_CATEGORIES = listOf(
-        "Maison", "Féculents", "Condiments", "Petit Dej",
+        "Maison", "Féculents", "Condiments", "Petit Dej/Gouter",
         "Viandes/Poissons", "Laitage", "Fruits/Légumes",
         "Hygiène/Beauté", "Surgelés"
     )

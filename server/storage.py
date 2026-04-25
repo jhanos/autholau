@@ -8,12 +8,99 @@ DEFAULT_CATEGORIES = [
     "Maison",
     "Féculents",
     "Condiments",
-    "Petit Dej",
+    "Petit Dej/Gouter",
     "Viandes/Poissons",
     "Laitage",
     "Fruits/Légumes",
     "Hygiène/Beauté",
     "Surgelés",
+]
+
+# (category, name) pairs — seeded into shopping.json on first access
+DEFAULT_SHOPPING_ITEMS = [
+    # Maison
+    ("Maison", "Sel adoucisseur"),
+    ("Maison", "Sac poubelle"),
+    ("Maison", "Papier toilette"),
+    ("Maison", "Sopalin"),
+    ("Maison", "Film alimentaire"),
+    ("Maison", "Piles"),
+    ("Maison", "Lessive"),
+    ("Maison", "Liquide vaisselle"),
+    ("Maison", "Produit WC"),
+    ("Maison", "Éponges"),
+    ("Maison", "Papier aluminium"),
+    ("Maison", "Vinaigre blanc"),
+    ("Maison", "Litière Chat"),
+    ("Maison", "Biscuit pour chat"),
+    ("Maison", "Biscuits pour chien"),
+    # Féculents
+    ("Féculents", "Pâtes"),
+    ("Féculents", "Riz"),
+    ("Féculents", "Semoule"),
+    ("Féculents", "Pommes de terre"),
+    ("Féculents", "Farine"),
+    ("Féculents", "Pain"),
+    # Condiments
+    ("Condiments", "Huile d'olive"),
+    ("Condiments", "Ketchup"),
+    # Petit Dej/Gouter
+    ("Petit Dej/Gouter", "Café"),
+    ("Petit Dej/Gouter", "Thé"),
+    ("Petit Dej/Gouter", "Cacao"),
+    ("Petit Dej/Gouter", "Compote"),
+    ("Petit Dej/Gouter", "Confiture"),
+    ("Petit Dej/Gouter", "Nocciolata"),
+    ("Petit Dej/Gouter", "Biscuits gouter"),
+    ("Petit Dej/Gouter", "Céréales"),
+    ("Petit Dej/Gouter", "Pain tranché"),
+    # Viandes/Poissons
+    ("Viandes/Poissons", "Poulet"),
+    ("Viandes/Poissons", "Jambon"),
+    ("Viandes/Poissons", "Saucisse"),
+    ("Viandes/Poissons", "Poulet pané"),
+    ("Viandes/Poissons", "Lardons"),
+    ("Viandes/Poissons", "Lardons Saumon"),
+    ("Viandes/Poissons", "Thon"),
+    # Laitage
+    ("Laitage", "Lait"),
+    ("Laitage", "Yaourt Augustine"),
+    ("Laitage", "Gruyère"),
+    ("Laitage", "Parmesan"),
+    ("Laitage", "Oeufs"),
+    ("Laitage", "Yaourt Thomas"),
+    ("Laitage", "Yaourt Laura"),
+    ("Laitage", "Beurre"),
+    ("Laitage", "Petit beurre"),
+    ("Laitage", "Kiri"),
+    ("Laitage", "Skyr"),
+    ("Laitage", "Lait Végétal"),
+    # Fruits/Légumes
+    ("Fruits/Légumes", "Tomates"),
+    ("Fruits/Légumes", "Salade"),
+    ("Fruits/Légumes", "Concombre"),
+    ("Fruits/Légumes", "Carottes"),
+    ("Fruits/Légumes", "Pommes"),
+    ("Fruits/Légumes", "Bananes"),
+    ("Fruits/Légumes", "Oranges"),
+    ("Fruits/Légumes", "Citrons"),
+    ("Fruits/Légumes", "Poivrons"),
+    ("Fruits/Légumes", "Pommes de terre"),
+    # Hygiène/Beauté
+    ("Hygiène/Beauté", "Brosse à dents"),
+    ("Hygiène/Beauté", "Dentifrice"),
+    ("Hygiène/Beauté", "Shampoing"),
+    ("Hygiène/Beauté", "Gel douche"),
+    ("Hygiène/Beauté", "Coton-tiges"),
+    # Surgelés
+    ("Surgelés", "Pizza"),
+    ("Surgelés", "Frites"),
+    ("Surgelés", "Nuggets"),
+    ("Surgelés", "Glaces"),
+    ("Surgelés", "Petits pois"),
+    ("Surgelés", "Haricots verts"),
+    ("Surgelés", "Poissons ronds"),
+    ("Surgelés", "Poissons panés"),
 ]
 
 
@@ -36,6 +123,23 @@ def _write(filename: str, data: list[dict]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(_path(filename), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def reseed() -> None:
+    """Overwrite categories and shopping list with defaults."""
+    import uuid, time
+    _write("categories.json", list(DEFAULT_CATEGORIES))
+    items = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "checked": False,
+            "category": cat,
+            "updatedAt": int(time.time() * 1000),
+        }
+        for cat, name in DEFAULT_SHOPPING_ITEMS
+    ]
+    _write("shopping.json", items)
 
 
 # --- Events ---
@@ -81,6 +185,21 @@ def delete_event(event_id: str) -> bool:
 # --- Shopping ---
 
 def get_shopping() -> list[dict]:
+    path = _path("shopping.json")
+    if not os.path.exists(path):
+        import uuid, time
+        items = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "checked": False,
+                "category": cat,
+                "updatedAt": int(time.time() * 1000),
+            }
+            for cat, name in DEFAULT_SHOPPING_ITEMS
+        ]
+        _write("shopping.json", items)
+        return items
     return _read("shopping.json")
 
 
