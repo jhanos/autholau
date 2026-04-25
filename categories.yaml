@@ -1,83 +1,100 @@
 Maison:
-- Sel adoucisseur
-- Sac poubelle
-- Papier toilette
-- Sopalin
-- Film alimentaire
-- Piles
-- Lessive
-- Liquide vaisselle
-- Produit WC
-- Éponges
-- Papier aluminium
-- Vinaigre blanc
-- Litière Chat
-- Biscuit pour chat
-- Biscuits pour chien
+  Leclerc:
+  - Sel adoucisseur
+  - Sac poubelle
+  - Papier toilette
+  - Sopalin
+  - Film alimentaire
+  - Piles
+  - Lessive
+  - Liquide vaisselle
+  - Produit WC
+  - Éponges
+  - Papier aluminium
+  - Vinaigre blanc
+  - Litière Chat
+  - Biscuit pour chat
+  - Biscuits pour chien
 Féculents:
-- Pâtes
-- Riz
-- Semoule
-- Pommes de terre
-- Farine
-- Pain
+  Leclerc:
+  - Pâtes
+  - Riz
+  - Semoule
+  - Pommes de terre
+  - Farine
+  Grand Frais:
+  - Pain
 Condiments:
-- Huile d'olive
-- Ketchup
+  Leclerc:
+  - Huile d'olive
+  - Ketchup
 Petit Dej/Gouter:
-- Café
-- Thé
-- Cacao
-- Compote
-- Confiture
-- Nocciolata
-- Biscuits gouter
-- Céréales
-- Pain tranché
+  Leclerc:
+  - Café
+  - Thé
+  - Cacao
+  - Compote
+  - Confiture
+  - Nocciolata
+  - Biscuits gouter
+  - Céréales
+  - Pain tranché
 Viandes/Poissons:
-- Poulet
-- Jambon
-- Saucisse
-- Poulet pané
-- Lardons
-- Lardons Saumon
-- Thon
+  Leclerc:
+  - Poulet
+  - Jambon
+  - Saucisse
+  - Poulet pané
+  - Lardons
+  - Lardons Saumon
+  - Thon
 Laitage:
-- Lait
-- Yaourt Augustine
-- Gruyère
-- Parmesan
-- Oeufs
-- Yaourt Thomas
-- Yaourt Laura
-- Beurre
-- Petit beurre
-- Kiri
-- Skyr
-- Lait Végétal
+  Leclerc:
+  - Lait
+  - Yaourt Augustine
+  - Gruyère
+  - Parmesan
+  - Oeufs
+  - Yaourt Thomas
+  - Yaourt Laura
+  - Beurre
+  - Petit beurre
+  - Kiri
+  - Skyr
+  - Lait Végétal
+  Grand Frais:
+  - Oeufs
+  - Yaourt Chocolat
+  - Yaourt trois chocolats
 Fruits/Légumes:
-- Tomates
-- Salade
-- Concombre
-- Carottes
-- Pommes
-- Bananes
-- Oranges
-- Citrons
-- Poivrons
-- Pommes de terre
+  Grand Frais:
+  - Framboises
+  - Fraises
+  - Melons
+  - Tomates
+  - Salade
+  - Concombre
+  - Carottes
+  - Pommes
+  - Bananes
+  - Oranges
+  - Citrons
+  - Poivrons
+  - Pommes de terre
 Hygiène/Beauté:
-- Brosse à dents
-- Dentifrice
-- Shampoing
-- Gel douche
-- Coton-tiges
+  Leclerc:
+  - Brosse à dents
+  - Dentifrice
+  - Shampoing
+  - Gel douche
+  - Coton-tiges
 Surgelés:
-- Pizza
-- Frites
-- Nuggets
-- Glaces
-- Petits pois
-- Haricots verts
-- Poissons ronds
-- Poissons panés
+  Leclerc:
+  - Pizza
+  - Frites
+  - Nuggets
+  - Glaces
+  - Petits pois
+  - Haricots verts
+  - Poissons ronds
+  - Poissons panés
