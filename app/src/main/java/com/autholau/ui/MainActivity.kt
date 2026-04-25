@@ -182,6 +182,47 @@ class MainActivity : Activity() {
         }
     }
 
+    // ── Sibling helpers ───────────────────────────────────────────────────────
+
+    /** Returns the "other-store" sibling of an item (Leclerc↔Grand Frais), if any. */
+    private fun findSibling(item: ShoppingItem): ShoppingItem? =
+        shopping.firstOrNull {
+            it.id != item.id &&
+            it.name.equals(item.name, ignoreCase = true) &&
+            it.category == item.category &&
+            (it.store == "Leclerc" || it.store == "Grand Frais")
+        }
+
+    /**
+     * Apply [transform] to [item] and, if it has a sibling and [syncSibling] is true,
+     * apply [siblingTransform] (defaults to [transform]) to the sibling too.
+     * Saves + syncs all touched items.
+     */
+    private fun updateWithSibling(
+        item: ShoppingItem,
+        syncSibling: Boolean = true,
+        transform: (ShoppingItem) -> ShoppingItem,
+        siblingTransform: ((ShoppingItem) -> ShoppingItem)? = null
+    ) {
+        val updated = transform(item)
+        val sibling = if (syncSibling) findSibling(item) else null
+        val updatedSibling = sibling?.let { (siblingTransform ?: transform)(it) }
+
+        shopping = shopping.map { s ->
+            when (s.id) {
+                updated.id        -> updated
+                updatedSibling?.id -> updatedSibling
+                else              -> s
+            }
+        }
+        Prefs.saveShopping(this, shopping)
+        renderShopping()
+        Thread {
+            Api.updateShoppingItem(updated)
+            updatedSibling?.let { Api.updateShoppingItem(it) }
+        }.start()
+    }
+
     // ── Events ────────────────────────────────────────────────────────────────
 
     private fun renderEvents() {
@@ -243,11 +284,13 @@ class MainActivity : Activity() {
         }
     }
 
-    // ── Shopping — grouped adapter ─────────────────────────────────────────────
+    // ── Shopping rows ─────────────────────────────────────────────────────────
 
     private sealed class ShoppingRow {
         data class Header(val label: String) : ShoppingRow()
-        data class Item(val item: ShoppingItem) : ShoppingRow()
+        /** [primary] is the item for this store (or Leclerc for merged rows).
+         *  [sibling] is non-null when both stores have this item (merged Liste row). */
+        data class Item(val primary: ShoppingItem, val sibling: ShoppingItem? = null) : ShoppingRow()
     }
 
     private fun buildShoppingRows(items: List<ShoppingItem>): List<ShoppingRow> {
@@ -255,43 +298,63 @@ class MainActivity : Activity() {
 
         when (section) {
 
+            // ── Liste ─────────────────────────────────────────────────────────
             Section.LISTE -> {
-                // All Leclerc + Grand Frais items.
-                // planned=false → unchecked (still to plan)
-                // planned=true  → greyed out (already in store list)
-                // Sorted: unchecked first within each category, planned at bottom
-                val filtered = items
-                    .filter { it.store == "Leclerc" || it.store == "Grand Frais" }
-                    .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
+                val leclercItems    = items.filter { it.store == "Leclerc" }
+                val grandFraisItems = items.filter { it.store == "Grand Frais" }
+
+                // Build merged items: key = (name lowercase, category)
+                data class Key(val name: String, val cat: String?)
+                val lMap = leclercItems.associateBy    { Key(it.name.lowercase(), it.category) }
+                val gMap = grandFraisItems.associateBy { Key(it.name.lowercase(), it.category) }
+                val allKeys = (lMap.keys + gMap.keys).toSet()
+
+                // Each key becomes one ShoppingRow.Item (primary=Leclerc if exists, else GrandFrais; sibling=other)
+                data class MergedItem(
+                    val primary: ShoppingItem,
+                    val sibling: ShoppingItem?,
+                    val planned: Boolean  // true if any sibling is planned
+                )
+                val merged = allKeys.map { k ->
+                    val l = lMap[k]
+                    val g = gMap[k]
+                    val primary  = l ?: g!!
+                    val sibling  = if (l != null && g != null) g else null
+                    val planned  = (l?.planned ?: false) || (g?.planned ?: false)
+                    MergedItem(primary, sibling, planned)
+                }
+
+                // Filter by search
+                val filtered = if (query.isEmpty()) merged
+                               else merged.filter { it.primary.name.lowercase().contains(query) }
 
                 val rows     = mutableListOf<ShoppingRow>()
                 val catOrder = categories + listOf(null as String?)
-                val grouped  = filtered.groupBy { it.category }
+                val grouped  = filtered.groupBy { it.primary.category }
 
                 for (cat in catOrder) {
                     val group = grouped[cat] ?: continue
-                    val unplanned = group.filter { !it.planned }.sortedBy { it.name }
-                    val planned   = group.filter {  it.planned }.sortedBy { it.name }
+                    val unplanned = group.filter { !it.planned }.sortedBy { it.primary.name }
+                    val planned   = group.filter {  it.planned }.sortedBy { it.primary.name }
                     if (unplanned.isEmpty() && planned.isEmpty()) continue
                     rows.add(ShoppingRow.Header(cat ?: getString(R.string.category_none)))
-                    unplanned.forEach { rows.add(ShoppingRow.Item(it)) }
-                    planned.forEach   { rows.add(ShoppingRow.Item(it)) }
+                    unplanned.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
+                    planned.forEach   { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
                 }
                 // Unknown categories
                 for ((cat, group) in grouped) {
                     if (cat != null && cat !in categories) {
                         rows.add(ShoppingRow.Header(cat))
-                        group.filter { !it.planned }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
-                        group.filter {  it.planned }.sortedBy { it.name }.forEach { rows.add(ShoppingRow.Item(it)) }
+                        group.filter { !it.planned }.sortedBy { it.primary.name }.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
+                        group.filter {  it.planned }.sortedBy { it.primary.name }.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
                     }
                 }
                 return rows
             }
 
+            // ── Leclerc / Grand Frais ─────────────────────────────────────────
             Section.LECLERC, Section.GRAND_FRAIS -> {
-                // Only items where planned=true for this store.
-                // checked=false → normal; checked=true → strikethrough ("Done" section)
-                val store = currentStore()
+                val store    = currentStore()
                 val filtered = items
                     .filter { it.store == store && it.planned }
                     .let { if (query.isEmpty()) it else it.filter { i -> i.name.lowercase().contains(query) } }
@@ -320,6 +383,7 @@ class MainActivity : Activity() {
                 return rows
             }
 
+            // ── Autre ─────────────────────────────────────────────────────────
             Section.AUTRE -> {
                 val filtered = items
                     .filter { it.store == "Autre" }
@@ -384,7 +448,8 @@ class MainActivity : Activity() {
                         v
                     }
                     is ShoppingRow.Item -> {
-                        val s   = row.item
+                        val s       = row.primary
+                        val sibling = row.sibling   // non-null only in merged Liste rows
                         val v   = convert ?: layoutInflater.inflate(R.layout.row_shopping, parent, false)
                         val cb  = v.findViewById<CheckBox>(R.id.cbItem)
                         val tv  = v.findViewById<TextView>(R.id.tvItemName)
@@ -394,11 +459,16 @@ class MainActivity : Activity() {
 
                         when {
                             isListe -> {
-                                // checkbox reflects planned state
-                                cb.isChecked = s.planned
-                                val badge = if (s.store == "Grand Frais") " [GF]" else " [L]"
+                                // planned state — if sibling exists, planned = either is planned
+                                val isPlanned = s.planned || (sibling?.planned ?: false)
+                                cb.isChecked = isPlanned
+                                val badge = when {
+                                    sibling != null -> " [L+GF]"
+                                    s.store == "Grand Frais" -> " [GF]"
+                                    else -> " [L]"
+                                }
                                 tv.text = s.name + badge
-                                if (s.planned) {
+                                if (isPlanned) {
                                     tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                                     tv.setTextColor(getColor(R.color.muted))
                                 } else {
@@ -406,20 +476,34 @@ class MainActivity : Activity() {
                                     tv.setTextColor(getColor(R.color.text_primary))
                                 }
                                 cb.setOnCheckedChangeListener { _, planned ->
-                                    // Toggling planned; if un-planning also uncheck
-                                    val updated = s.copy(
+                                    val ts = System.currentTimeMillis()
+                                    val updatedPrimary = s.copy(
                                         planned   = planned,
                                         checked   = if (!planned) false else s.checked,
-                                        updatedAt = System.currentTimeMillis()
+                                        updatedAt = ts
                                     )
-                                    shopping = shopping.map { if (it.id == s.id) updated else it }
+                                    val updatedSibling = sibling?.copy(
+                                        planned   = planned,
+                                        checked   = if (!planned) false else sibling.checked,
+                                        updatedAt = ts
+                                    )
+                                    shopping = shopping.map { item ->
+                                        when (item.id) {
+                                            updatedPrimary.id  -> updatedPrimary
+                                            updatedSibling?.id -> updatedSibling
+                                            else               -> item
+                                        }
+                                    }
                                     Prefs.saveShopping(this@MainActivity, shopping)
                                     renderShopping()
-                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                    Thread {
+                                        Api.updateShoppingItem(updatedPrimary)
+                                        updatedSibling?.let { Api.updateShoppingItem(it) }
+                                    }.start()
                                 }
                             }
+
                             isStoreList -> {
-                                // checkbox reflects checked (picked up) state
                                 cb.isChecked = s.checked
                                 tv.text = s.name
                                 if (s.checked) {
@@ -430,13 +514,13 @@ class MainActivity : Activity() {
                                     tv.setTextColor(getColor(R.color.text_primary))
                                 }
                                 cb.setOnCheckedChangeListener { _, checked ->
-                                    val updated = s.copy(checked = checked, updatedAt = System.currentTimeMillis())
-                                    shopping = shopping.map { if (it.id == s.id) updated else it }
-                                    Prefs.saveShopping(this@MainActivity, shopping)
-                                    renderShopping()
-                                    Thread { Api.updateShoppingItem(updated) }.start()
+                                    // Sync sibling if it is also planned
+                                    updateWithSibling(s, syncSibling = true, transform = { item ->
+                                        item.copy(checked = checked, updatedAt = System.currentTimeMillis())
+                                    })
                                 }
                             }
+
                             else -> { // Autre
                                 cb.isChecked = s.checked
                                 tv.text = s.name
@@ -457,7 +541,6 @@ class MainActivity : Activity() {
                             }
                         }
 
-                        // Delete button only for Autre
                         del.visibility = if (s.store == "Autre") View.VISIBLE else View.GONE
                         del.setOnClickListener {
                             shopping = shopping.filter { it.id != s.id }
@@ -468,7 +551,7 @@ class MainActivity : Activity() {
 
                         v.setOnLongClickListener {
                             if (s.store == "Autre") showRenameDialog(s)
-                            else showChangeStoreDialog(s)
+                            else showChangeStoreDialog(s, sibling)
                             true
                         }
                         v
@@ -480,14 +563,8 @@ class MainActivity : Activity() {
 
     // ── Shopping actions ──────────────────────────────────────────────────────
 
-    /**
-     * Clear checked items:
-     * - Leclerc / Grand Frais: uncheck AND un-plan all checked items
-     *   → they disappear from the store list and reappear unchecked in Liste
-     * - Autre: delete all checked items
-     */
     private fun clearChecked() {
-        val store = currentStore()
+        val store   = currentStore()
         val checked = shopping.filter { it.store == store && it.checked }
         if (checked.isEmpty()) return
 
@@ -497,18 +574,29 @@ class MainActivity : Activity() {
             renderShopping()
             Thread { checked.forEach { Api.deleteShoppingItem(it.id) } }.start()
         } else {
-            val reset = checked.map { it.copy(checked = false, planned = false, updatedAt = System.currentTimeMillis()) }
-            shopping = shopping.map { item -> reset.firstOrNull { it.id == item.id } ?: item }
+            // Reset checked items and their siblings (planned=false, checked=false)
+            val ts = System.currentTimeMillis()
+            val toReset = mutableListOf<ShoppingItem>()
+            for (item in checked) {
+                toReset.add(item.copy(planned = false, checked = false, updatedAt = ts))
+                findSibling(item)?.let { sib ->
+                    if (toReset.none { it.id == sib.id })
+                        toReset.add(sib.copy(planned = false, checked = false, updatedAt = ts))
+                }
+            }
+            shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
             renderShopping()
-            Thread { reset.forEach { Api.updateShoppingItem(it) } }.start()
+            Thread { toReset.forEach { Api.updateShoppingItem(it) } }.start()
         }
     }
 
+    // ── Add item dialog ───────────────────────────────────────────────────────
+
     private fun showAddItemDialog() {
-        val isListe  = section == Section.LISTE
-        val isAutre  = section == Section.AUTRE
-        val prefill  = etNewItem.text.toString().trim()
+        val isListe = section == Section.LISTE
+        val isAutre = section == Section.AUTRE
+        val prefill = etNewItem.text.toString().trim()
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -523,10 +611,13 @@ class MainActivity : Activity() {
         }
         layout.addView(etName)
 
-        var spinnerCat:   Spinner? = null
-        var spinnerStore: Spinner? = null
+        var spinnerCat: Spinner?  = null
+        var cbLeclerc:  CheckBox? = null
+        var cbGF:       CheckBox? = null
+        var cbAlso:     CheckBox? = null   // "also add to other store" for Leclerc/GF sections
 
         if (!isAutre) {
+            // Category spinner
             val tvCatLabel = TextView(this).apply {
                 text = getString(R.string.label_categories)
                 setTextColor(getColor(R.color.text_secondary))
@@ -541,38 +632,76 @@ class MainActivity : Activity() {
             layout.addView(tvCatLabel)
             layout.addView(spinnerCat)
 
+            // Store selection
+            val tvStoreLabel = TextView(this).apply {
+                text = "Magasin"
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = 12f
+                setPadding(0, 16, 0, 4)
+            }
+            layout.addView(tvStoreLabel)
+
             if (isListe) {
-                val tvStoreLabel = TextView(this).apply {
-                    text = "Magasin"
-                    setTextColor(getColor(R.color.text_secondary))
-                    textSize = 12f
-                    setPadding(0, 16, 0, 4)
+                // Two independent checkboxes — at least one must be ticked
+                cbLeclerc = CheckBox(this).apply {
+                    text = "Leclerc"
+                    isChecked = true
+                    setTextColor(getColor(R.color.text_primary))
                 }
-                spinnerStore = Spinner(this)
-                spinnerStore.adapter = ArrayAdapter(
-                    this, android.R.layout.simple_spinner_item, listOf("Leclerc", "Grand Frais")
-                ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-                layout.addView(tvStoreLabel)
-                layout.addView(spinnerStore)
+                cbGF = CheckBox(this).apply {
+                    text = "Grand Frais"
+                    isChecked = false
+                    setTextColor(getColor(R.color.text_primary))
+                }
+                layout.addView(cbLeclerc)
+                layout.addView(cbGF)
+            } else {
+                // In a store section: "Also add to [other store]" checkbox
+                val otherStore = if (section == Section.LECLERC) "Grand Frais" else "Leclerc"
+                cbAlso = CheckBox(this).apply {
+                    text = "Aussi dans $otherStore"
+                    isChecked = false
+                    setTextColor(getColor(R.color.text_primary))
+                }
+                layout.addView(cbAlso)
             }
         }
 
-        val sc = spinnerCat
-        val ss = spinnerStore
+        val sc    = spinnerCat
+        val cbL   = cbLeclerc
+        val cbG   = cbGF
+        val cbA   = cbAlso
+
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.action_add))
             .setView(layout)
             .setPositiveButton(getString(R.string.action_add)) { _, _ ->
                 val itemName = etName.text.toString().trim()
                 if (itemName.isEmpty()) return@setPositiveButton
+
                 val cat = if (isAutre || sc == null || sc.selectedItemPosition == 0) null
                           else categories[sc.selectedItemPosition - 1]
-                val store = when {
-                    isAutre              -> "Autre"
-                    isListe && ss != null -> listOf("Leclerc", "Grand Frais")[ss.selectedItemPosition]
-                    else                 -> currentStore()
+
+                when {
+                    isAutre -> createShoppingItem(itemName, cat, "Autre")
+
+                    isListe -> {
+                        val wantLeclerc   = cbL?.isChecked ?: false
+                        val wantGrandFrais = cbG?.isChecked ?: false
+                        if (!wantLeclerc && !wantGrandFrais) return@setPositiveButton
+                        if (wantLeclerc)    createShoppingItem(itemName, cat, "Leclerc")
+                        if (wantGrandFrais) createShoppingItem(itemName, cat, "Grand Frais")
+                    }
+
+                    else -> {
+                        // In a Leclerc or Grand Frais section
+                        createShoppingItem(itemName, cat, currentStore())
+                        if (cbA?.isChecked == true) {
+                            val other = if (section == Section.LECLERC) "Grand Frais" else "Leclerc"
+                            createShoppingItem(itemName, cat, other)
+                        }
+                    }
                 }
-                createShoppingItem(itemName, cat, store)
                 etNewItem.setText("")
                 searchQuery = ""
             }
@@ -608,14 +737,16 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun showChangeStoreDialog(item: ShoppingItem) {
+    private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
         val stores = arrayOf("Leclerc", "Grand Frais", "Autre")
         AlertDialog.Builder(this)
             .setTitle("Move to store")
             .setItems(stores) { _, idx ->
                 val newStore = stores[idx]
                 if (newStore == item.store) return@setItems
-                val updated = item.copy(store = newStore, updatedAt = System.currentTimeMillis())
+                val ts = System.currentTimeMillis()
+                val updated = item.copy(store = newStore, updatedAt = ts)
+                // If sibling exists and we're moving to sibling's store, they'd clash — just update primary
                 shopping = shopping.map { if (it.id == item.id) updated else it }
                 Prefs.saveShopping(this, shopping)
                 renderShopping()
