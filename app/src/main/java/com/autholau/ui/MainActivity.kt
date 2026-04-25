@@ -805,8 +805,14 @@ class MainActivity : Activity() {
 
     private fun onAdd() { startActivity(Intent(this, EventFormActivity::class.java)) }
 
+    private var lastSyncErrorShownAt: Long = 0
+
     private fun showSyncError() = runOnUiThread {
-        Toast.makeText(this, getString(R.string.err_sync), Toast.LENGTH_SHORT).show()
+        val now = System.currentTimeMillis()
+        if (now - lastSyncErrorShownAt >= 30_000) {
+            lastSyncErrorShownAt = now
+            Toast.makeText(this, getString(R.string.err_sync), Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun refresh() {
