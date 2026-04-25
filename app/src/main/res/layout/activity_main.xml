@@ -176,6 +176,17 @@
             android:textAllCaps="true"/>
 
         <TextView
+            android:id="@+id/navListe"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="@string/nav_liste"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:paddingStart="32dp"
+            android:background="?android:attr/selectableItemBackground"/>
+
+        <TextView
             android:id="@+id/navLeclerc"
             android:layout_width="match_parent"
             android:layout_height="48dp"

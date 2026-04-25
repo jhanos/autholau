@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Autholau</string>
     <string name="nav_events">Events</string>
-    <string name="nav_shopping">Shopping</string>
+    <string name="nav_liste">Liste</string>
     <string name="nav_leclerc">Leclerc</string>
     <string name="nav_grand_frais">Grand Frais</string>
     <string name="nav_autre">Autre</string>
