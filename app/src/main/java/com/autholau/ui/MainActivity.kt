@@ -23,7 +23,7 @@ import java.time.format.DateTimeFormatter
 
 class MainActivity : Activity() {
 
-    private enum class Section { EVENTS, LISTE, LECLERC, GRAND_FRAIS, AUTRE }
+    private enum class Section { EVENTS, LISTE, COURSE, LECLERC, GRAND_FRAIS, AUTRE }
 
     private var section = Section.EVENTS
 
@@ -84,9 +84,16 @@ class MainActivity : Activity() {
         scrim.setOnClickListener { closeDrawer() }
         findViewById<TextView>(R.id.navEvents).setOnClickListener     { switchSection(Section.EVENTS);      closeDrawer() }
         findViewById<TextView>(R.id.navListe).setOnClickListener      { switchSection(Section.LISTE);       closeDrawer() }
+        findViewById<TextView>(R.id.navCourse).setOnClickListener     { switchSection(Section.COURSE);      closeDrawer() }
         findViewById<TextView>(R.id.navLeclerc).setOnClickListener    { switchSection(Section.LECLERC);     closeDrawer() }
         findViewById<TextView>(R.id.navGrandFrais).setOnClickListener { switchSection(Section.GRAND_FRAIS); closeDrawer() }
         findViewById<TextView>(R.id.navAutre).setOnClickListener      { switchSection(Section.AUTRE);       closeDrawer() }
+
+        // Show/hide Course vs Leclerc+Grand Frais based on courseMode pref
+        val courseMode = Prefs.courseMode(this)
+        findViewById<TextView>(R.id.navCourse).visibility     = if (courseMode) View.VISIBLE else View.GONE
+        findViewById<TextView>(R.id.navLeclerc).visibility    = if (courseMode) View.GONE    else View.VISIBLE
+        findViewById<TextView>(R.id.navGrandFrais).visibility = if (courseMode) View.GONE    else View.VISIBLE
         findViewById<TextView>(R.id.navSettings).setOnClickListener {
             closeDrawer()
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -169,6 +176,13 @@ class MainActivity : Activity() {
                 rowShoppingInput.visibility = View.VISIBLE
                 btnAdd.visibility           = View.GONE
                 btnClearChecked.visibility  = View.GONE
+                renderShopping()
+            }
+            Section.COURSE -> {
+                tvTitle.text                = getString(R.string.nav_course)
+                rowShoppingInput.visibility = View.VISIBLE
+                btnAdd.visibility           = View.GONE
+                btnClearChecked.visibility  = View.VISIBLE
                 renderShopping()
             }
             Section.LECLERC, Section.GRAND_FRAIS, Section.AUTRE -> {
@@ -356,6 +370,58 @@ class MainActivity : Activity() {
                 return rows
             }
 
+            // ── Course (merged Leclerc + Grand Frais, planned only, tick = checked) ──
+            Section.COURSE -> {
+                val leclercItems    = items.filter { it.store == "Leclerc"     && it.planned }
+                val grandFraisItems = items.filter { it.store == "Grand Frais" && it.planned }
+
+                data class CKey(val name: String, val cat: String?)
+                val lMap    = leclercItems.associateBy    { CKey(it.name.lowercase(), it.category) }
+                val gMap    = grandFraisItems.associateBy { CKey(it.name.lowercase(), it.category) }
+                val allKeys = (lMap.keys + gMap.keys).toSet()
+
+                data class CMergedItem(
+                    val primary: ShoppingItem,
+                    val sibling: ShoppingItem?,
+                    val checked: Boolean  // true if all present siblings are checked
+                )
+                val merged = allKeys.map { k ->
+                    val l        = lMap[k]
+                    val g        = gMap[k]
+                    val primary  = l ?: g!!
+                    val sibling  = if (l != null && g != null) g else null
+                    val checked  = (l == null || l.checked) && (g == null || g.checked)
+                    CMergedItem(primary, sibling, checked)
+                }
+
+                val filtered = if (query.isEmpty()) merged
+                               else merged.filter { it.primary.name.lowercase().contains(query) }
+
+                val unchecked = filtered.filter { !it.checked }
+                val checked   = filtered.filter {  it.checked }
+
+                val rows     = mutableListOf<ShoppingRow>()
+                val catOrder = categories + listOf(null as String?)
+                val grouped  = unchecked.groupBy { it.primary.category }
+
+                for (cat in catOrder) {
+                    val group = grouped[cat] ?: continue
+                    rows.add(ShoppingRow.Header(cat ?: getString(R.string.category_none)))
+                    group.sortedBy { it.primary.name }.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
+                }
+                for ((cat, group) in grouped) {
+                    if (cat != null && cat !in categories) {
+                        rows.add(ShoppingRow.Header(cat))
+                        group.sortedBy { it.primary.name }.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
+                    }
+                }
+                if (checked.isNotEmpty()) {
+                    rows.add(ShoppingRow.Header("✓ Fait"))
+                    checked.sortedBy { it.primary.name }.forEach { rows.add(ShoppingRow.Item(it.primary, it.sibling)) }
+                }
+                return rows
+            }
+
             // ── Leclerc / Grand Frais ─────────────────────────────────────────
             Section.LECLERC, Section.GRAND_FRAIS -> {
                 val store    = currentStore()
@@ -432,6 +498,7 @@ class MainActivity : Activity() {
         }
 
         val isListe     = section == Section.LISTE
+        val isCourse    = section == Section.COURSE
         val isStoreList = section == Section.LECLERC || section == Section.GRAND_FRAIS
         val TYPE_HEADER = 0
         val TYPE_ITEM   = 1
@@ -491,6 +558,44 @@ class MainActivity : Activity() {
                                         checked   = if (!planned) false else sibling.checked,
                                         updatedAt = ts
                                     )
+                                    shopping = shopping.map { item ->
+                                        when (item.id) {
+                                            updatedPrimary.id  -> updatedPrimary
+                                            updatedSibling?.id -> updatedSibling
+                                            else               -> item
+                                        }
+                                    }
+                                    Prefs.saveShopping(this@MainActivity, shopping)
+                                    renderShopping()
+                                    Thread {
+                                        val ok1 = Api.updateShoppingItem(updatedPrimary)
+                                        val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+                                        if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
+                                    }.start()
+                                }
+                            }
+
+                            isCourse -> {
+                                // checked = all present siblings are checked
+                                val isChecked = s.checked && (sibling == null || sibling.checked)
+                                cb.isChecked = isChecked
+                                val badge = when {
+                                    sibling != null          -> " [L+GF]"
+                                    s.store == "Grand Frais" -> " [GF]"
+                                    else                     -> " [L]"
+                                }
+                                tv.text = s.name + badge
+                                if (isChecked) {
+                                    tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                                    tv.setTextColor(getColor(R.color.muted))
+                                } else {
+                                    tv.paintFlags = tv.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                                    tv.setTextColor(getColor(R.color.text_primary))
+                                }
+                                cb.setOnCheckedChangeListener { _, checked ->
+                                    val ts = System.currentTimeMillis()
+                                    val updatedPrimary = s.copy(checked = checked, updatedAt = ts)
+                                    val updatedSibling = sibling?.copy(checked = checked, updatedAt = ts)
                                     shopping = shopping.map { item ->
                                         when (item.id) {
                                             updatedPrimary.id  -> updatedPrimary
@@ -575,6 +680,26 @@ class MainActivity : Activity() {
     // ── Shopping actions ──────────────────────────────────────────────────────
 
     private fun clearChecked() {
+        if (section == Section.COURSE) {
+            // Reset all fully-checked Course items (planned=false, checked=false) on both stores
+            val checkedIds = shopping
+                .filter { (it.store == "Leclerc" || it.store == "Grand Frais") && it.planned && it.checked }
+                .map { it.id }.toSet()
+            if (checkedIds.isEmpty()) return
+            val ts = System.currentTimeMillis()
+            val toReset = shopping
+                .filter { it.id in checkedIds }
+                .map { it.copy(planned = false, checked = false, updatedAt = ts) }
+            shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
+            Prefs.saveShopping(this, shopping)
+            renderShopping()
+            Thread { toReset.forEach { item ->
+                val ok = Api.updateShoppingItem(item)
+                if (ok == null) showSyncError()
+            } }.start()
+            return
+        }
+
         val store   = currentStore()
         val checked = shopping.filter { it.store == store && it.checked }
         if (checked.isEmpty()) return
@@ -611,8 +736,9 @@ class MainActivity : Activity() {
     // ── Add item dialog ───────────────────────────────────────────────────────
 
     private fun showAddItemDialog() {
-        val isListe = section == Section.LISTE
-        val isAutre = section == Section.AUTRE
+        val isListe  = section == Section.LISTE
+        val isCourse = section == Section.COURSE
+        val isAutre  = section == Section.AUTRE
         val prefill = etNewItem.text.toString().trim()
 
         val layout = LinearLayout(this).apply {
@@ -658,7 +784,7 @@ class MainActivity : Activity() {
             }
             layout.addView(tvStoreLabel)
 
-            if (isListe) {
+            if (isListe || isCourse) {
                 // Two independent checkboxes — at least one must be ticked
                 cbLeclerc = CheckBox(this).apply {
                     text = "Leclerc"
@@ -667,7 +793,7 @@ class MainActivity : Activity() {
                 }
                 cbGF = CheckBox(this).apply {
                     text = "Grand Frais"
-                    isChecked = false
+                    isChecked = isCourse   // both pre-ticked in Course mode
                     setTextColor(getColor(R.color.text_primary))
                 }
                 layout.addView(cbLeclerc)
@@ -702,8 +828,8 @@ class MainActivity : Activity() {
                 when {
                     isAutre -> createShoppingItem(itemName, cat, "Autre")
 
-                    isListe -> {
-                        val wantLeclerc   = cbL?.isChecked ?: false
+                    isListe || isCourse -> {
+                        val wantLeclerc    = cbL?.isChecked ?: false
                         val wantGrandFrais = cbG?.isChecked ?: false
                         if (!wantLeclerc && !wantGrandFrais) return@setPositiveButton
                         if (wantLeclerc)    createShoppingItem(itemName, cat, "Leclerc")

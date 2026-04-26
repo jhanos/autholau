@@ -19,6 +19,7 @@ object Prefs {
     const val CALENDAR_ENABLED  = "calendar_enabled"
     const val CALENDAR_ID       = "calendar_id"
     const val CALENDAR_ROW_MAP  = "calendar_row_map"
+    const val COURSE_MODE       = "course_mode"
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -88,6 +89,12 @@ object Prefs {
         map.forEach { (k, v) -> obj.put(k, v) }
         get(ctx).edit().putString(CALENDAR_ROW_MAP, obj.toString()).apply()
     }
+
+    fun courseMode(ctx: Context): Boolean =
+        get(ctx).getBoolean(COURSE_MODE, false)
+
+    fun saveCourseMode(ctx: Context, enabled: Boolean) =
+        get(ctx).edit().putBoolean(COURSE_MODE, enabled).apply()
 
     // ── Events cache ──────────────────────────────────────────────────────────
 

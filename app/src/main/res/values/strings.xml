@@ -56,4 +56,6 @@
     <string name="btn_show_logs">Afficher les logs</string>
     <string name="btn_clear_logs">Effacer</string>
     <string name="logs_empty">Aucun log pour l\'instant.</string>
+    <string name="nav_course">Course</string>
+    <string name="label_course_mode">Vue courses combinée</string>
 </resources>

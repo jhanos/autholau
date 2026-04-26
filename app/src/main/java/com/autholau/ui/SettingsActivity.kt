@@ -22,6 +22,7 @@ class SettingsActivity : Activity() {
     private lateinit var listCategories:  LinearLayout
     private lateinit var etNewCategory:   EditText
     private lateinit var tvCatError:      TextView
+    private lateinit var switchCourseMode: Switch
     private lateinit var switchCalendar:  Switch
     private lateinit var tvCalendarLabel: TextView
     private lateinit var spinnerCalendar: Spinner
@@ -43,6 +44,7 @@ class SettingsActivity : Activity() {
         listCategories  = findViewById(R.id.listCategories)
         etNewCategory   = findViewById(R.id.etNewCategory)
         tvCatError      = findViewById(R.id.tvCatError)
+        switchCourseMode = findViewById(R.id.switchCourseMode)
         switchCalendar  = findViewById(R.id.switchCalendar)
         tvCalendarLabel = findViewById(R.id.tvCalendarLabel)
         spinnerCalendar = findViewById(R.id.spinnerCalendar)
@@ -66,6 +68,12 @@ class SettingsActivity : Activity() {
             com.autholau.notifications.NotificationScheduler.scheduleAll(this, events, lead)
             tvStatus.text       = getString(R.string.msg_saved)
             tvStatus.visibility = View.VISIBLE
+        }
+
+        // ── Course mode ──────────────────────────────────────────────────────
+        switchCourseMode.isChecked = Prefs.courseMode(this)
+        switchCourseMode.setOnCheckedChangeListener { _, isChecked ->
+            Prefs.saveCourseMode(this, isChecked)
         }
 
         // ── Categories ───────────────────────────────────────────────────────
