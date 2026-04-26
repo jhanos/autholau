@@ -48,8 +48,11 @@ object CalendarSync {
             log("SKIP — sync désactivé dans les paramètres")
             return false
         }
-        if (!hasPermission(ctx)) {
-            log("SKIP — permission WRITE_CALENDAR non accordée")
+        val readOk  = ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR)  == PackageManager.PERMISSION_GRANTED
+        val writeOk = ctx.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        log("Permissions — READ_CALENDAR=${if (readOk) "OK" else "REFUSÉE"}, WRITE_CALENDAR=${if (writeOk) "OK" else "REFUSÉE"}")
+        if (!readOk || !writeOk) {
+            log("SKIP — permission(s) manquante(s)")
             return false
         }
         return true
@@ -173,30 +176,52 @@ object CalendarSync {
             return saved
         }
         val primary = findPrimaryCalendarId(ctx)
-        if (primary != null) log("ID calendrier auto-détecté : $primary")
+        if (primary != null) {
+            log("ID calendrier auto-détecté : $primary")
+        } else {
+            log("ERREUR — findPrimaryCalendarId a retourné null (aucun calendrier disponible)")
+        }
         return primary
     }
 
     fun listCalendars(ctx: Context): List<Pair<Long, String>> {
         val result = mutableListOf<Pair<Long, String>>()
-        if (!hasPermission(ctx)) return result
+        val readOk  = ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR)  == PackageManager.PERMISSION_GRANTED
+        val writeOk = ctx.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        if (!readOk || !writeOk) {
+            log("listCalendars — permission manquante (READ=$readOk, WRITE=$writeOk), abandon")
+            return result
+        }
         try {
             val projection = arrayOf(
                 CalendarContract.Calendars._ID,
                 CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
                 CalendarContract.Calendars.ACCOUNT_TYPE
             )
-            ctx.contentResolver.query(
+            val cursor = ctx.contentResolver.query(
                 CalendarContract.Calendars.CONTENT_URI,
                 projection, null, null, null
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id   = cursor.getLong(0)
-                    val name = cursor.getString(1) ?: continue
-                    val type = cursor.getString(2) ?: ""
-                    if (type == CalendarContract.ACCOUNT_TYPE_LOCAL) continue
+            )
+            if (cursor == null) {
+                log("listCalendars — query a retourné null (ContentResolver indisponible ?)")
+                return result
+            }
+            val total = cursor.count
+            log("listCalendars — $total ligne(s) trouvée(s) dans CalendarContract")
+            cursor.use {
+                while (it.moveToNext()) {
+                    val id   = it.getLong(0)
+                    val name = it.getString(1) ?: "<sans nom>"
+                    val type = it.getString(2) ?: "<type inconnu>"
+                    // Keep all calendars — local calendars are valid too
+                    log("  → id=$id, nom=\"$name\", type=$type → GARDÉ")
                     result.add(Pair(id, name))
                 }
+            }
+            if (result.isEmpty()) {
+                log("listCalendars — 0 calendrier retourné (appareil sans agenda configuré ?)")
+            } else {
+                log("listCalendars — ${result.size} calendrier(s) disponible(s)")
             }
         } catch (e: Exception) {
             log("listCalendars EXCEPTION — ${e.javaClass.simpleName}: ${e.message}")
