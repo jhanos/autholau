@@ -14,6 +14,7 @@ import android.widget.*
 import com.autholau.R
 import com.autholau.model.Event
 import com.autholau.model.ShoppingItem
+import com.autholau.calendar.CalendarSync
 import com.autholau.notifications.NotificationScheduler
 import com.autholau.storage.Api
 import com.autholau.storage.Prefs
@@ -280,8 +281,8 @@ class MainActivity : Activity() {
             .replaceFirstChar { it.uppercase() }
         val timeSuffix = if (time != null) " · $time" else ""
         return when {
-            days == 0 -> "Today$timeSuffix"
-            days == 1 -> "Tomorrow$timeSuffix"
+            days == 0 -> "${getString(R.string.label_today)}$timeSuffix"
+            days == 1 -> "${getString(R.string.label_tomorrow)}$timeSuffix"
             days > 1  -> "$rawDate · $dayName · +${days}d$timeSuffix"
             else      -> rawDate
         }
@@ -738,7 +739,7 @@ class MainActivity : Activity() {
         layout.addView(etName)
 
         AlertDialog.Builder(this)
-            .setTitle("Edit item")
+            .setTitle(getString(R.string.title_edit_item))
             .setView(layout)
             .setPositiveButton(getString(R.string.action_save)) { _, _ ->
                 val newName = etName.text.toString().trim()
@@ -759,7 +760,7 @@ class MainActivity : Activity() {
     private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
         val stores = arrayOf("Leclerc", "Grand Frais", "Autre")
         AlertDialog.Builder(this)
-            .setTitle("Move to store")
+            .setTitle(getString(R.string.title_move_store))
             .setItems(stores) { _, idx ->
                 val newStore = stores[idx]
                 if (newStore == item.store) return@setItems
@@ -830,6 +831,7 @@ class MainActivity : Activity() {
                     events = newEvents
                     Prefs.saveEvents(this, events)
                     NotificationScheduler.scheduleAll(this, events, Prefs.notifLeadDays(this))
+                    Thread { CalendarSync.syncAll(this, events) }.start()
                 }
                 if (newShopping != null) {
                     shopping = newShopping

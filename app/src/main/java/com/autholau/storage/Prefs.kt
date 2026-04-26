@@ -16,6 +16,8 @@ object Prefs {
     const val EVENTS_CACHE      = "events_cache"
     const val SHOPPING_CACHE    = "shopping_cache"
     const val CATEGORIES_CACHE  = "categories_cache"
+    const val CALENDAR_ENABLED  = "calendar_enabled"
+    const val CALENDAR_ID       = "calendar_id"
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -55,6 +57,18 @@ object Prefs {
 
     fun saveNotifLead(ctx: Context, days: Int) =
         get(ctx).edit().putInt(NOTIF_LEAD, days).apply()
+
+    fun calendarEnabled(ctx: Context): Boolean =
+        get(ctx).getBoolean(CALENDAR_ENABLED, false)
+
+    fun saveCalendarEnabled(ctx: Context, enabled: Boolean) =
+        get(ctx).edit().putBoolean(CALENDAR_ENABLED, enabled).apply()
+
+    fun calendarId(ctx: Context): Long =
+        get(ctx).getLong(CALENDAR_ID, -1L)
+
+    fun saveCalendarId(ctx: Context, id: Long) =
+        get(ctx).edit().putLong(CALENDAR_ID, id).apply()
 
     // ── Events cache ──────────────────────────────────────────────────────────
 

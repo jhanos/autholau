@@ -1,22 +1,34 @@
 package com.autholau.ui
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.widget.*
 import com.autholau.R
+import com.autholau.calendar.CalendarSync
 import com.autholau.storage.Api
 import com.autholau.storage.Prefs
 
 class SettingsActivity : Activity() {
 
     private val leadOptions = intArrayOf(1, 3, 7, 14, 30)
-    private val leadLabels  = arrayOf("1 day", "3 days", "1 week", "2 weeks", "1 month")
+    private val leadLabels  = arrayOf("1 jour", "3 jours", "1 semaine", "2 semaines", "1 mois")
 
-    private lateinit var listCategories: LinearLayout
-    private lateinit var etNewCategory:  EditText
-    private lateinit var tvCatError:     TextView
+    private val PERM_CALENDAR = 42
+
+    private lateinit var listCategories:  LinearLayout
+    private lateinit var etNewCategory:   EditText
+    private lateinit var tvCatError:      TextView
+    private lateinit var switchCalendar:  Switch
+    private lateinit var tvCalendarLabel: TextView
+    private lateinit var spinnerCalendar: Spinner
+    private lateinit var tvCalendarError: TextView
     private var categories: MutableList<String> = mutableListOf()
+
+    // calendars as (id, name) — populated when permission is granted
+    private var calendarList: List<Pair<Long, String>> = emptyList()
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
@@ -27,9 +39,13 @@ class SettingsActivity : Activity() {
         val spinner    = findViewById<Spinner>(R.id.spinnerLead)
         val btnSave    = findViewById<Button>(R.id.btnSave)
         val tvStatus   = findViewById<TextView>(R.id.tvStatus)
-        listCategories = findViewById(R.id.listCategories)
-        etNewCategory  = findViewById(R.id.etNewCategory)
-        tvCatError     = findViewById(R.id.tvCatError)
+        listCategories  = findViewById(R.id.listCategories)
+        etNewCategory   = findViewById(R.id.etNewCategory)
+        tvCatError      = findViewById(R.id.tvCatError)
+        switchCalendar  = findViewById(R.id.switchCalendar)
+        tvCalendarLabel = findViewById(R.id.tvCalendarLabel)
+        spinnerCalendar = findViewById(R.id.spinnerCalendar)
+        tvCalendarError = findViewById(R.id.tvCalendarError)
 
         etUrl.setText(Prefs.serverUrl(this))
 
@@ -47,18 +63,117 @@ class SettingsActivity : Activity() {
             Api.baseUrl = url
             val events = Prefs.loadEvents(this)
             com.autholau.notifications.NotificationScheduler.scheduleAll(this, events, lead)
-            tvStatus.text       = "Saved"
+            tvStatus.text       = getString(R.string.msg_saved)
             tvStatus.visibility = View.VISIBLE
         }
 
-        // Load categories from cache first, then refresh from server
+        // ── Categories ───────────────────────────────────────────────────────
         categories = Prefs.loadCategories(this).toMutableList()
         renderCategories()
         fetchCategories()
-
         findViewById<Button>(R.id.btnAddCategory).setOnClickListener { addCategory() }
         etNewCategory.setOnEditorActionListener { _, _, _ -> addCategory(); true }
+
+        // ── Calendar sync ────────────────────────────────────────────────────
+        switchCalendar.isChecked = Prefs.calendarEnabled(this)
+        updateCalendarSectionVisibility()
+
+        if (switchCalendar.isChecked && hasCalendarPermission()) {
+            loadCalendars()
+        }
+
+        switchCalendar.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                if (hasCalendarPermission()) {
+                    Prefs.saveCalendarEnabled(this, true)
+                    loadCalendars()
+                    tvCalendarError.visibility = View.GONE
+                } else {
+                    requestPermissions(
+                        arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
+                        PERM_CALENDAR
+                    )
+                }
+            } else {
+                Prefs.saveCalendarEnabled(this, false)
+                tvCalendarError.visibility = View.GONE
+            }
+            updateCalendarSectionVisibility()
+        }
+
+        spinnerCalendar.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, pos: Int, id: Long) {
+                if (calendarList.isEmpty()) return
+                val selected = calendarList[pos]
+                // pos 0 = "Automatique" sentinel (id = -1), otherwise real id
+                Prefs.saveCalendarId(this@SettingsActivity, selected.first)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
     }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        if (code == PERM_CALENDAR) {
+            if (results.isNotEmpty() && results[0] == PackageManager.PERMISSION_GRANTED) {
+                Prefs.saveCalendarEnabled(this, true)
+                loadCalendars()
+                tvCalendarError.visibility = View.GONE
+            } else {
+                // Permission denied — revert switch silently
+                switchCalendar.setOnCheckedChangeListener(null)
+                switchCalendar.isChecked = false
+                Prefs.saveCalendarEnabled(this, false)
+                tvCalendarError.text       = getString(R.string.err_calendar_perm)
+                tvCalendarError.visibility = View.VISIBLE
+                // Re-attach listener
+                switchCalendar.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) {
+                        requestPermissions(
+                            arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
+                            PERM_CALENDAR
+                        )
+                    } else {
+                        Prefs.saveCalendarEnabled(this, false)
+                        tvCalendarError.visibility = View.GONE
+                    }
+                    updateCalendarSectionVisibility()
+                }
+            }
+            updateCalendarSectionVisibility()
+        }
+    }
+
+    // ── Calendar helpers ──────────────────────────────────────────────────────
+
+    private fun hasCalendarPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+
+    private fun loadCalendars() {
+        Thread {
+            val raw = CalendarSync.listCalendars(this)
+            // Prepend "Automatique" option (id = -1)
+            val list = listOf(Pair(-1L, getString(R.string.calendar_auto))) + raw
+            runOnUiThread {
+                calendarList = list
+                val names = list.map { it.second }.toTypedArray()
+                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, names)
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                spinnerCalendar.adapter = adapter
+                // Select saved calendar
+                val savedId = Prefs.calendarId(this)
+                val savedPos = list.indexOfFirst { it.first == savedId }.takeIf { it >= 0 } ?: 0
+                spinnerCalendar.setSelection(savedPos)
+            }
+        }.start()
+    }
+
+    private fun updateCalendarSectionVisibility() {
+        val visible = switchCalendar.isChecked
+        tvCalendarLabel.visibility  = if (visible) View.VISIBLE else View.GONE
+        spinnerCalendar.visibility  = if (visible) View.VISIBLE else View.GONE
+    }
+
+    // ── Category helpers ──────────────────────────────────────────────────────
 
     private fun fetchCategories() {
         Thread {
@@ -81,7 +196,6 @@ class SettingsActivity : Activity() {
             row.findViewById<ImageButton>(R.id.btnDeleteCategory).setOnClickListener {
                 deleteCategory(name)
             }
-            // divider between rows
             if (index > 0) {
                 val divider = View(this)
                 divider.setBackgroundColor(getColor(R.color.divider))
@@ -96,7 +210,7 @@ class SettingsActivity : Activity() {
         val name = etNewCategory.text.toString().trim()
         if (name.isEmpty()) return
         if (categories.any { it.equals(name, ignoreCase = true) }) {
-            tvCatError.text       = "Category already exists"
+            tvCatError.text       = getString(R.string.err_cat_exists)
             tvCatError.visibility = View.VISIBLE
             return
         }
@@ -105,18 +219,13 @@ class SettingsActivity : Activity() {
         categories.add(name)
         Prefs.saveCategories(this, categories)
         renderCategories()
-        Thread {
-            Api.createCategory(name)
-        }.start()
+        Thread { Api.createCategory(name) }.start()
     }
 
     private fun deleteCategory(name: String) {
         categories.remove(name)
         Prefs.saveCategories(this, categories)
         renderCategories()
-        Thread {
-            Api.deleteCategory(name)
-        }.start()
+        Thread { Api.deleteCategory(name) }.start()
     }
 }
-

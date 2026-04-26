@@ -10,6 +10,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
 import com.autholau.R
+import com.autholau.calendar.CalendarSync
 import com.autholau.model.Event
 import com.autholau.notifications.NotificationScheduler
 import com.autholau.storage.Api
@@ -57,9 +58,9 @@ class EventFormActivity : Activity() {
                 cbNotify.isChecked = it.notify
             }
             btnDel.visibility = View.VISIBLE
-            title = "Edit Event"
+            title = getString(R.string.title_edit_event)
         } else {
-            title = "New Event"
+            title = getString(R.string.title_new_event)
         }
 
         btnSave.setOnClickListener { save() }
@@ -149,6 +150,9 @@ class EventFormActivity : Activity() {
                         NotificationScheduler.cancel(this, result)
                     }
 
+                    // Sync to device calendar
+                    CalendarSync.upsertEvent(this, result)
+
                     finish()
                 } else {
                     showError(getString(R.string.err_network))
@@ -168,6 +172,7 @@ class EventFormActivity : Activity() {
                     val cached = Prefs.loadEvents(this).filter { it.id != e.id }
                     Prefs.saveEvents(this, cached)
                     NotificationScheduler.cancel(this, e)
+                    CalendarSync.deleteEvent(this, e)
                     finish()
                 } else {
                     showError(getString(R.string.err_network))
