@@ -150,8 +150,8 @@ class EventFormActivity : Activity() {
                         NotificationScheduler.cancel(this, result)
                     }
 
-                    // Sync to device calendar
-                    CalendarSync.upsertEvent(this, result)
+                    // Sync to device calendar (must run off main thread)
+                    Thread { CalendarSync.upsertEvent(this, result) }.start()
 
                     finish()
                 } else {
@@ -172,7 +172,7 @@ class EventFormActivity : Activity() {
                     val cached = Prefs.loadEvents(this).filter { it.id != e.id }
                     Prefs.saveEvents(this, cached)
                     NotificationScheduler.cancel(this, e)
-                    CalendarSync.deleteEvent(this, e)
+                    Thread { CalendarSync.deleteEvent(this, e) }.start()
                     finish()
                 } else {
                     showError(getString(R.string.err_network))

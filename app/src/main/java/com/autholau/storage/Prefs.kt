@@ -18,6 +18,7 @@ object Prefs {
     const val CATEGORIES_CACHE  = "categories_cache"
     const val CALENDAR_ENABLED  = "calendar_enabled"
     const val CALENDAR_ID       = "calendar_id"
+    const val CALENDAR_ROW_MAP  = "calendar_row_map"
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -69,6 +70,24 @@ object Prefs {
 
     fun saveCalendarId(ctx: Context, id: Long) =
         get(ctx).edit().putLong(CALENDAR_ID, id).apply()
+
+    // ── Calendar row map (autholauId → device calendar row ID) ───────────────
+
+    fun calendarRowMap(ctx: Context): MutableMap<String, Long> {
+        val raw = get(ctx).getString(CALENDAR_ROW_MAP, null) ?: return mutableMapOf()
+        return try {
+            val obj = JSONObject(raw)
+            val map = mutableMapOf<String, Long>()
+            obj.keys().forEach { key -> map[key] = obj.getLong(key) }
+            map
+        } catch (_: Exception) { mutableMapOf() }
+    }
+
+    fun saveCalendarRowMap(ctx: Context, map: Map<String, Long>) {
+        val obj = JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        get(ctx).edit().putString(CALENDAR_ROW_MAP, obj.toString()).apply()
+    }
 
     // ── Events cache ──────────────────────────────────────────────────────────
 
