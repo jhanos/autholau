@@ -183,5 +183,34 @@
             android:layout_marginTop="8dp"
             android:visibility="gone"/>
 
+        <!-- ── Divider ────────────────────────────────────────────────────── -->
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="24dp"/>
+
+        <!-- ── Debug logs ─────────────────────────────────────────────────── -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_cal_debug"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.1"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnShowCalendarLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_show_logs"
+            android:backgroundTint="@color/surface"
+            android:textColor="@color/text_primary"/>
+
     </LinearLayout>
 </ScrollView>

@@ -52,4 +52,8 @@
     <string name="label_calendar">Agenda</string>
     <string name="calendar_auto">Automatique</string>
     <string name="err_calendar_perm">Permission agenda refusée — sync désactivée</string>
+    <string name="label_cal_debug">Journal de sync agenda</string>
+    <string name="btn_show_logs">Afficher les logs</string>
+    <string name="btn_clear_logs">Effacer</string>
+    <string name="logs_empty">Aucun log pour l\'instant.</string>
 </resources>

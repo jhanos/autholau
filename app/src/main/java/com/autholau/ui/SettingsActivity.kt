@@ -2,6 +2,7 @@ package com.autholau.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
@@ -110,6 +111,9 @@ class SettingsActivity : Activity() {
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
+
+        // ── Debug logs ───────────────────────────────────────────────────────
+        findViewById<Button>(R.id.btnShowCalendarLogs).setOnClickListener { showCalendarLogs() }
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
@@ -227,5 +231,36 @@ class SettingsActivity : Activity() {
         Prefs.saveCategories(this, categories)
         renderCategories()
         Thread { Api.deleteCategory(name) }.start()
+    }
+
+    // ── Calendar debug logs ───────────────────────────────────────────────────
+
+    private fun showCalendarLogs() {
+        val logs = CalendarSync.getLogs()
+        val text = if (logs.isEmpty()) getString(R.string.logs_empty)
+                   else logs.joinToString("\n")
+
+        val scrollView = ScrollView(this)
+        val tv = TextView(this).apply {
+            this.text = text
+            textSize  = 11f
+            setTextColor(getColor(R.color.text_primary))
+            setPadding(32, 24, 32, 24)
+            setTextIsSelectable(true)
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        scrollView.addView(tv)
+
+        // Scroll to bottom so latest logs are visible
+        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.label_cal_debug))
+            .setView(scrollView)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(getString(R.string.btn_clear_logs)) { _, _ ->
+                CalendarSync.clearLogs()
+            }
+            .show()
     }
 }
