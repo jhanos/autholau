@@ -884,6 +884,34 @@ class MainActivity : Activity() {
     }
 
     private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
+        if (section == Section.LISTE) {
+            val options = arrayOf(getString(R.string.action_change_store), getString(R.string.action_delete))
+            AlertDialog.Builder(this)
+                .setTitle(item.name)
+                .setItems(options) { _, idx ->
+                    when (idx) {
+                        0 -> showStorePicker(item)
+                        1 -> {
+                            val idsToDelete = listOfNotNull(item.id, sibling?.id).toSet()
+                            shopping = shopping.filter { it.id !in idsToDelete }
+                            Prefs.saveShopping(this, shopping)
+                            renderShopping()
+                            Thread {
+                                idsToDelete.forEach { id ->
+                                    val ok = Api.deleteShoppingItem(id)
+                                    if (!ok) showSyncError()
+                                }
+                            }.start()
+                        }
+                    }
+                }
+                .show()
+            return
+        }
+        showStorePicker(item)
+    }
+
+    private fun showStorePicker(item: ShoppingItem) {
         val stores = arrayOf("Leclerc", "Grand Frais", "Autre")
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_move_store))
@@ -892,7 +920,6 @@ class MainActivity : Activity() {
                 if (newStore == item.store) return@setItems
                 val ts = System.currentTimeMillis()
                 val updated = item.copy(store = newStore, updatedAt = ts)
-                // If sibling exists and we're moving to sibling's store, they'd clash — just update primary
                 shopping = shopping.map { if (it.id == item.id) updated else it }
                 Prefs.saveShopping(this, shopping)
                 renderShopping()
