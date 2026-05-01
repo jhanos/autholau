@@ -503,6 +503,10 @@ class MainActivity : Activity() {
         val TYPE_HEADER = 0
         val TYPE_ITEM   = 1
 
+        // Preserve scroll position across adapter swap
+        val firstVisible = listView.firstVisiblePosition
+        val topOffset    = listView.getChildAt(0)?.top ?: 0
+
         listView.adapter = object : android.widget.BaseAdapter() {
             override fun getCount() = cleaned.size
             override fun getItem(pos: Int) = cleaned[pos]
@@ -675,6 +679,7 @@ class MainActivity : Activity() {
                 }
             }
         }
+        listView.setSelectionFromTop(firstVisible, topOffset)
     }
 
     // ── Shopping actions ──────────────────────────────────────────────────────
