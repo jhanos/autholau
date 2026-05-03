@@ -533,6 +533,13 @@ class MainActivity : Activity() {
                         val cb  = v.findViewById<CheckBox>(R.id.cbItem)
                         val tv  = v.findViewById<TextView>(R.id.tvItemName)
                         val del = v.findViewById<ImageButton>(R.id.btnDeleteItem)
+                        val ivRec = v.findViewById<android.widget.ImageView>(R.id.ivRecurring)
+
+                        // Show recurring icon in Liste and Course sections
+                        val hasRecurrence = (isListe || isCourse) && recurring.any {
+                            it.name.equals(s.name, ignoreCase = true) && it.category == s.category
+                        }
+                        ivRec.visibility = if (hasRecurrence) View.VISIBLE else View.GONE
 
                         cb.setOnCheckedChangeListener(null)
 
@@ -1078,6 +1085,7 @@ class MainActivity : Activity() {
         weekOptions: Array<String>, weekValues: IntArray,
         defaultWeeks: Int
     ) {
+        val allOptions  = weekOptions + arrayOf("Personnalisé...")
         val defaultIdx  = weekValues.indexOfFirst { it == defaultWeeks }.coerceAtLeast(0)
         var selectedIdx = defaultIdx
 
@@ -1088,29 +1096,53 @@ class MainActivity : Activity() {
 
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_recurrence))
-            .setSingleChoiceItems(weekOptions, defaultIdx) { _, idx -> selectedIdx = idx }
+            .setSingleChoiceItems(allOptions, defaultIdx) { _, idx -> selectedIdx = idx }
             .setPositiveButton(getString(R.string.action_enable)) { _, _ ->
-                val stores    = listOfNotNull(item.store, sibling?.store).distinct()
-                val newItem   = RecurringItem(
-                    id          = existing?.id ?: java.util.UUID.randomUUID().toString(),
-                    name        = item.name,
-                    category    = item.category,
-                    stores      = stores,
-                    periodWeeks = weekValues[selectedIdx],
-                    lastBought  = System.currentTimeMillis()
-                )
-                recurring = recurring.filter {
-                    !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
-                } + newItem
-                Prefs.saveRecurring(this, recurring)
-                Thread {
-                    val ok = if (existing != null) Api.updateRecurring(newItem)
-                             else Api.createRecurring(newItem)
-                    if (ok == null) showSyncError()
-                }.start()
+                if (selectedIdx == allOptions.lastIndex) {
+                    // Custom weeks input
+                    val et = EditText(this).apply {
+                        inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                        setText("5")
+                        selectAll()
+                        setTextColor(getColor(R.color.text_primary))
+                        setPadding(48, 24, 48, 8)
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle(getString(R.string.title_recurrence))
+                        .setView(et)
+                        .setPositiveButton(getString(R.string.action_enable)) { _, _ ->
+                            val weeks = et.text.toString().trim().toIntOrNull()?.coerceAtLeast(1) ?: return@setPositiveButton
+                            saveRecurringItem(item, sibling, existing, weeks)
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                } else {
+                    saveRecurringItem(item, sibling, existing, weekValues[selectedIdx])
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun saveRecurringItem(item: ShoppingItem, sibling: ShoppingItem?, existing: RecurringItem?, weeks: Int) {
+        val stores  = listOfNotNull(item.store, sibling?.store).distinct()
+        val newItem = RecurringItem(
+            id          = existing?.id ?: java.util.UUID.randomUUID().toString(),
+            name        = item.name,
+            category    = item.category,
+            stores      = stores,
+            periodWeeks = weeks,
+            lastBought  = System.currentTimeMillis()
+        )
+        recurring = recurring.filter {
+            !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
+        } + newItem
+        Prefs.saveRecurring(this, recurring)
+        Thread {
+            val ok = if (existing != null) Api.updateRecurring(newItem)
+                     else Api.createRecurring(newItem)
+            if (ok == null) showSyncError()
+        }.start()
     }
 
     private fun createShoppingItem(name: String, category: String?, store: String) {

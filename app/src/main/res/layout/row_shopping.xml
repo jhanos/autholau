@@ -25,6 +25,15 @@
         android:textColor="@color/text_primary"
         android:paddingStart="8dp"/>
 
+    <ImageView
+        android:id="@+id/ivRecurring"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/ic_recurring"
+        android:layout_marginEnd="4dp"
+        android:visibility="gone"
+        android:contentDescription="Récurrent"/>
+
     <ImageButton
         android:id="@+id/btnDeleteItem"
         android:layout_width="40dp"
