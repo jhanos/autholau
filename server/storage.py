@@ -283,3 +283,43 @@ def delete_category(name: str) -> bool:
     cats = [c for c in cats if c != name]
     _write("categories.json", cats)
     return True
+
+
+# --- Recurring items ---
+
+def get_recurring() -> list[dict]:
+    return _read("recurring.json")
+
+
+def get_recurring_item(item_id: str) -> dict | None:
+    return next((r for r in get_recurring() if r["id"] == item_id), None)
+
+
+def create_recurring(item: dict) -> dict:
+    items = get_recurring()
+    items.append(item)
+    _write("recurring.json", items)
+    return item
+
+
+def update_recurring(item_id: str, incoming: dict) -> tuple[dict | None, bool]:
+    """Returns (item, accepted). accepted=False means conflict (server version returned)."""
+    items = get_recurring()
+    for i, item in enumerate(items):
+        if item["id"] == item_id:
+            if incoming.get("updatedAt", 0) >= item.get("updatedAt", 0):
+                items[i] = incoming
+                _write("recurring.json", items)
+                return incoming, True
+            else:
+                return item, False
+    return None, False
+
+
+def delete_recurring(item_id: str) -> bool:
+    items = get_recurring()
+    new_items = [r for r in items if r["id"] != item_id]
+    if len(new_items) == len(items):
+        return False
+    _write("recurring.json", new_items)
+    return True

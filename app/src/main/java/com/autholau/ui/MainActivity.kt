@@ -41,10 +41,11 @@ class MainActivity : Activity() {
     private lateinit var btnRefresh:       ImageButton
 
     // Data
-    private var events:     List<Event>        = emptyList()
-    private var shopping:   List<ShoppingItem> = emptyList()
-    private var categories: List<String>       = emptyList()
-    private var searchQuery: String            = ""
+    private var events:     List<Event>         = emptyList()
+    private var shopping:   List<ShoppingItem>  = emptyList()
+    private var categories: List<String>        = emptyList()
+    private var recurring:  List<RecurringItem> = emptyList()
+    private var searchQuery: String             = ""
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ class MainActivity : Activity() {
         events     = Prefs.loadEvents(this)
         shopping   = Prefs.loadShopping(this)
         categories = Prefs.loadCategories(this)
+        recurring  = Prefs.loadRecurring(this)
         checkAndAddRecurring()
         renderSection()
     }
@@ -696,12 +698,19 @@ class MainActivity : Activity() {
             val toReset = checkedItems.map { it.copy(planned = false, checked = false, updatedAt = ts) }
             shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
-            checkedItems.forEach { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
+            val updatedRecurring = checkedItems.mapNotNull { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
+            recurring = Prefs.loadRecurring(this)
             renderShopping()
-            Thread { toReset.forEach { item ->
-                val ok = Api.updateShoppingItem(item)
-                if (ok == null) showSyncError()
-            } }.start()
+            Thread {
+                toReset.forEach { item ->
+                    val ok = Api.updateShoppingItem(item)
+                    if (ok == null) showSyncError()
+                }
+                updatedRecurring.forEach { r ->
+                    val ok = Api.updateRecurring(r)
+                    if (ok == null) showSyncError()
+                }
+            }.start()
             return
         }
 
@@ -730,12 +739,19 @@ class MainActivity : Activity() {
             }
             shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
-            checked.forEach { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
+            val updatedRecurring = checked.mapNotNull { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
+            recurring = Prefs.loadRecurring(this)
             renderShopping()
-            Thread { toReset.forEach { item ->
-                val ok = Api.updateShoppingItem(item)
-                if (ok == null) showSyncError()
-            } }.start()
+            Thread {
+                toReset.forEach { item ->
+                    val ok = Api.updateShoppingItem(item)
+                    if (ok == null) showSyncError()
+                }
+                updatedRecurring.forEach { r ->
+                    val ok = Api.updateRecurring(r)
+                    if (ok == null) showSyncError()
+                }
+            }.start()
         }
     }
 
@@ -982,7 +998,6 @@ class MainActivity : Activity() {
     // ── Recurring items ───────────────────────────────────────────────────────
 
     private fun checkAndAddRecurring() {
-        val recurring = Prefs.loadRecurring(this)
         if (recurring.isEmpty()) return
         val now = System.currentTimeMillis()
         var changed = false
@@ -996,7 +1011,7 @@ class MainActivity : Activity() {
                     it.category == r.category
                 }
                 if (!alreadyExists) {
-                    val item = com.autholau.model.ShoppingItem(
+                    val item = ShoppingItem(
                         id        = java.util.UUID.randomUUID().toString(),
                         name      = r.name,
                         checked   = false,
@@ -1021,15 +1036,14 @@ class MainActivity : Activity() {
     }
 
     private fun showRecurrenceDialog(item: ShoppingItem, sibling: ShoppingItem?) {
-        val existing = Prefs.loadRecurring(this).firstOrNull {
+        val existing = recurring.firstOrNull {
             it.name.equals(item.name, ignoreCase = true) && it.category == item.category
         }
 
-        val weekOptions     = arrayOf("1 semaine", "2 semaines", "3 semaines", "4 semaines", "6 semaines", "8 semaines")
-        val weekValues      = intArrayOf(1, 2, 3, 4, 6, 8)
+        val weekOptions = arrayOf("1 semaine", "2 semaines", "3 semaines", "4 semaines", "6 semaines", "8 semaines")
+        val weekValues  = intArrayOf(1, 2, 3, 4, 6, 8)
 
         if (existing != null) {
-            // Show current config with options to modify or delete
             val currentWeeks = existing.periodWeeks
             val currentLabel = weekValues.indexOfFirst { it == currentWeeks }
                 .takeIf { it >= 0 }?.let { weekOptions[it] } ?: "$currentWeeks semaine(s)"
@@ -1044,10 +1058,13 @@ class MainActivity : Activity() {
                     when (idx) {
                         0 -> showRecurrencePicker(item, sibling, weekOptions, weekValues, existing.periodWeeks)
                         1 -> {
-                            val list = Prefs.loadRecurring(this).filter {
-                                !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
-                            }
-                            Prefs.saveRecurring(this, list)
+                            val idToDelete = existing.id
+                            recurring = recurring.filter { it.id != idToDelete }
+                            Prefs.saveRecurring(this, recurring)
+                            Thread {
+                                val ok = Api.deleteRecurring(idToDelete)
+                                if (!ok) showSyncError()
+                            }.start()
                         }
                     }
                 }
@@ -1062,25 +1079,36 @@ class MainActivity : Activity() {
         weekOptions: Array<String>, weekValues: IntArray,
         defaultWeeks: Int
     ) {
-        val defaultIdx = weekValues.indexOfFirst { it == defaultWeeks }.coerceAtLeast(0)
+        val defaultIdx  = weekValues.indexOfFirst { it == defaultWeeks }.coerceAtLeast(0)
         var selectedIdx = defaultIdx
+
+        // Check if we're modifying an existing entry
+        val existing = recurring.firstOrNull {
+            it.name.equals(item.name, ignoreCase = true) && it.category == item.category
+        }
 
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_recurrence))
             .setSingleChoiceItems(weekOptions, defaultIdx) { _, idx -> selectedIdx = idx }
             .setPositiveButton(getString(R.string.action_enable)) { _, _ ->
-                val stores = listOfNotNull(item.store, sibling?.store).distinct()
-                val list   = Prefs.loadRecurring(this).filter {
-                    !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
-                }.toMutableList()
-                list.add(RecurringItem(
+                val stores    = listOfNotNull(item.store, sibling?.store).distinct()
+                val newItem   = RecurringItem(
+                    id          = existing?.id ?: java.util.UUID.randomUUID().toString(),
                     name        = item.name,
                     category    = item.category,
                     stores      = stores,
                     periodWeeks = weekValues[selectedIdx],
                     lastBought  = System.currentTimeMillis()
-                ))
-                Prefs.saveRecurring(this, list)
+                )
+                recurring = recurring.filter {
+                    !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
+                } + newItem
+                Prefs.saveRecurring(this, recurring)
+                Thread {
+                    val ok = if (existing != null) Api.updateRecurring(newItem)
+                             else Api.createRecurring(newItem)
+                    if (ok == null) showSyncError()
+                }.start()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -1130,9 +1158,10 @@ class MainActivity : Activity() {
             val newEvents     = Api.getEvents()
             val newShopping   = Api.getShopping()
             val newCategories = Api.getCategories()
+            val newRecurring  = Api.getRecurring()
             runOnUiThread {
                 btnRefresh.isEnabled = true
-                if (newEvents == null && newShopping == null && newCategories == null) {
+                if (newEvents == null && newShopping == null && newCategories == null && newRecurring == null) {
                     Toast.makeText(this, getString(R.string.err_network), Toast.LENGTH_SHORT).show()
                 }
                 if (newEvents != null) {
@@ -1148,6 +1177,10 @@ class MainActivity : Activity() {
                 if (newCategories != null) {
                     categories = newCategories
                     Prefs.saveCategories(this, categories)
+                }
+                if (newRecurring != null) {
+                    recurring = newRecurring
+                    Prefs.saveRecurring(this, recurring)
                 }
                 renderSection()
             }

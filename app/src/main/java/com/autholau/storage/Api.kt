@@ -1,6 +1,7 @@
 package com.autholau.storage
 
 import com.autholau.model.Event
+import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import org.json.JSONArray
 import org.json.JSONObject
@@ -141,6 +142,27 @@ object Api {
         delete("categories/$encoded") in 200..299
     } catch (_: Exception) { false }
 
+    // ── Recurring items ───────────────────────────────────────────────────────
+
+    fun getRecurring(): List<RecurringItem>? = try {
+        val (code, body) = get("recurring")
+        if (code == 200) parseRecurringList(body) else null
+    } catch (_: Exception) { null }
+
+    fun createRecurring(r: RecurringItem): RecurringItem? = try {
+        val (code, body) = post("recurring", recurringToJson(r))
+        if (code == 201 || code == 200) parseRecurring(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun updateRecurring(r: RecurringItem): RecurringItem? = try {
+        val (code, body) = put("recurring/${r.id}", recurringToJson(r))
+        if (code == 200) parseRecurring(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun deleteRecurring(id: String): Boolean = try {
+        delete("recurring/$id") in 200..299
+    } catch (_: Exception) { false }
+
     // ── JSON helpers ──────────────────────────────────────────────────────────
 
     private fun eventToJson(e: Event) = JSONObject().apply {
@@ -189,5 +211,35 @@ object Api {
     private fun parseShopping(body: String): List<ShoppingItem> {
         val arr = JSONArray(body)
         return (0 until arr.length()).map { parseShoppingItem(arr.getJSONObject(it)) }
+    }
+
+    private fun recurringToJson(r: RecurringItem) = JSONObject().apply {
+        put("id",          r.id)
+        put("name",        r.name)
+        if (r.category != null) put("category", r.category)
+        val arr = JSONArray()
+        r.stores.forEach { arr.put(it) }
+        put("stores",      arr)
+        put("periodWeeks", r.periodWeeks)
+        put("lastBought",  r.lastBought)
+        put("updatedAt",   r.lastBought)   // server uses updatedAt for conflict resolution
+    }
+
+    private fun parseRecurring(o: JSONObject): RecurringItem {
+        val sArr   = o.optJSONArray("stores") ?: JSONArray()
+        val stores = (0 until sArr.length()).map { sArr.getString(it) }
+        return RecurringItem(
+            id          = o.getString("id"),
+            name        = o.getString("name"),
+            category    = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
+            stores      = stores,
+            periodWeeks = o.optInt("periodWeeks", 4),
+            lastBought  = o.optLong("lastBought", 0L)
+        )
+    }
+
+    private fun parseRecurringList(body: String): List<RecurringItem> {
+        val arr = JSONArray(body)
+        return (0 until arr.length()).map { parseRecurring(arr.getJSONObject(it)) }
     }
 }

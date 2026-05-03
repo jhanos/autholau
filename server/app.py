@@ -158,6 +158,51 @@ def delete_category(name: str):
 
 
 # ---------------------------------------------------------------------------
+# Recurring items
+# ---------------------------------------------------------------------------
+
+@app.route("/recurring", methods=["GET"])
+@auth.require_auth
+def list_recurring():
+    return jsonify(storage.get_recurring()), 200
+
+
+@app.route("/recurring", methods=["POST"])
+@auth.require_auth
+def create_recurring():
+    data = request.get_json(silent=True)
+    if not data or not data.get("id") or not data.get("name"):
+        return jsonify({"error": "Missing required fields: id, name"}), 400
+    if storage.get_recurring_item(data["id"]):
+        return jsonify({"error": "Item already exists"}), 409
+    item = storage.create_recurring(data)
+    return jsonify(item), 201
+
+
+@app.route("/recurring/<item_id>", methods=["PUT"])
+@auth.require_auth
+def update_recurring(item_id: str):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Missing body"}), 400
+    data["id"] = item_id
+    result, accepted = storage.update_recurring(item_id, data)
+    if result is None:
+        return jsonify({"error": "Item not found"}), 404
+    if not accepted:
+        return jsonify(result), 409
+    return jsonify(result), 200
+
+
+@app.route("/recurring/<item_id>", methods=["DELETE"])
+@auth.require_auth
+def delete_recurring(item_id: str):
+    if not storage.delete_recurring(item_id):
+        return jsonify({"error": "Item not found"}), 404
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------
 

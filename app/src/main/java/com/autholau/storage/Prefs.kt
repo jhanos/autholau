@@ -192,6 +192,7 @@ object Prefs {
         val arr = JSONArray()
         items.forEach { r ->
             arr.put(JSONObject().apply {
+                put("id",          r.id)
                 put("name",        r.name)
                 if (r.category != null) put("category", r.category)
                 val storesArr = JSONArray()
@@ -213,6 +214,7 @@ object Prefs {
                 val sArr   = o.getJSONArray("stores")
                 val stores = (0 until sArr.length()).map { sArr.getString(it) }
                 RecurringItem(
+                    id          = o.optString("id", java.util.UUID.randomUUID().toString()),
                     name        = o.getString("name"),
                     category    = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
                     stores      = stores,
@@ -223,14 +225,16 @@ object Prefs {
         } catch (_: Exception) { emptyList() }
     }
 
-    fun updateRecurringLastBought(ctx: Context, name: String, category: String?, ts: Long) {
+    /** Updates lastBought for the matching entry, saves, and returns the updated item (or null if not found). */
+    fun updateRecurringLastBought(ctx: Context, name: String, category: String?, ts: Long): RecurringItem? {
         val list = loadRecurring(ctx).toMutableList()
         val idx  = list.indexOfFirst {
             it.name.equals(name, ignoreCase = true) && it.category == category
         }
-        if (idx >= 0) {
-            list[idx] = list[idx].copy(lastBought = ts)
-            saveRecurring(ctx, list)
-        }
+        if (idx < 0) return null
+        val updated = list[idx].copy(lastBought = ts)
+        list[idx] = updated
+        saveRecurring(ctx, list)
+        return updated
     }
 }

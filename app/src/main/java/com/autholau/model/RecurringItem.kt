@@ -1,6 +1,7 @@
 package com.autholau.model
 
 data class RecurringItem(
+    val id:          String,
     val name:        String,
     val category:    String?,
     val stores:      List<String>,  // e.g. ["Leclerc"] or ["Leclerc", "Grand Frais"]
