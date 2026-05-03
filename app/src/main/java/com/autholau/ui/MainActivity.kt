@@ -1052,8 +1052,7 @@ class MainActivity : Activity() {
                 getString(R.string.action_disable_recurrence)
             )
             AlertDialog.Builder(this)
-                .setTitle(getString(R.string.title_recurrence))
-                .setMessage("${getString(R.string.label_current_period)} $currentLabel")
+                .setTitle("${getString(R.string.title_recurrence)} — $currentLabel")
                 .setItems(options) { _, idx ->
                     when (idx) {
                         0 -> showRecurrencePicker(item, sibling, weekOptions, weekValues, existing.periodWeeks)
