@@ -888,15 +888,56 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showRenameListeItemDialog(item: ShoppingItem, sibling: ShoppingItem?) {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+        }
+        val etName = EditText(this).apply {
+            setText(item.name)
+            selectAll()
+            setTextColor(getColor(R.color.text_primary))
+        }
+        layout.addView(etName)
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_edit_item))
+            .setView(layout)
+            .setPositiveButton(getString(R.string.action_save)) { _, _ ->
+                val newName = etName.text.toString().trim()
+                if (newName.isEmpty()) return@setPositiveButton
+                val ts = System.currentTimeMillis()
+                val updatedPrimary = item.copy(name = newName, updatedAt = ts)
+                val updatedSibling = sibling?.copy(name = newName, updatedAt = ts)
+                shopping = shopping.map { s ->
+                    when (s.id) {
+                        updatedPrimary.id  -> updatedPrimary
+                        updatedSibling?.id -> updatedSibling
+                        else               -> s
+                    }
+                }
+                Prefs.saveShopping(this, shopping)
+                renderShopping()
+                Thread {
+                    val ok1 = Api.updateShoppingItem(updatedPrimary)
+                    val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+                    if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
+                }.start()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
         if (section == Section.LISTE) {
-            val options = arrayOf(getString(R.string.action_change_store), getString(R.string.action_delete))
+            val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_change_store), getString(R.string.action_delete))
             AlertDialog.Builder(this)
                 .setTitle(item.name)
                 .setItems(options) { _, idx ->
                     when (idx) {
-                        0 -> showStorePicker(item)
-                        1 -> {
+                        0 -> showRenameListeItemDialog(item, sibling)
+                        1 -> showStorePicker(item)
+                        2 -> {
                             val idsToDelete = listOfNotNull(item.id, sibling?.id).toSet()
                             shopping = shopping.filter { it.id !in idsToDelete }
                             Prefs.saveShopping(this, shopping)

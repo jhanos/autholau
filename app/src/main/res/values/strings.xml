@@ -47,6 +47,7 @@
     <string name="title_edit_item">Modifier l\'article</string>
     <string name="title_move_store">Déplacer vers</string>
     <string name="action_change_store">Changer de magasin</string>
+    <string name="action_rename">Renommer</string>
     <string name="title_edit_event">Modifier l\'événement</string>
     <string name="title_new_event">Nouvel événement</string>
     <string name="label_calendar_sync">Synchroniser avec l\'agenda</string>
