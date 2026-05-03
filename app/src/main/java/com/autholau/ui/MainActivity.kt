@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.*
 import com.autholau.R
 import com.autholau.model.Event
+import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import com.autholau.calendar.CalendarSync
 import com.autholau.notifications.NotificationScheduler
@@ -120,6 +121,7 @@ class MainActivity : Activity() {
         events     = Prefs.loadEvents(this)
         shopping   = Prefs.loadShopping(this)
         categories = Prefs.loadCategories(this)
+        checkAndAddRecurring()
         renderSection()
     }
 
@@ -687,16 +689,14 @@ class MainActivity : Activity() {
     private fun clearChecked() {
         if (section == Section.COURSE) {
             // Reset all fully-checked Course items (planned=false, checked=false) on both stores
-            val checkedIds = shopping
+            val checkedItems = shopping
                 .filter { (it.store == "Leclerc" || it.store == "Grand Frais") && it.planned && it.checked }
-                .map { it.id }.toSet()
-            if (checkedIds.isEmpty()) return
+            if (checkedItems.isEmpty()) return
             val ts = System.currentTimeMillis()
-            val toReset = shopping
-                .filter { it.id in checkedIds }
-                .map { it.copy(planned = false, checked = false, updatedAt = ts) }
+            val toReset = checkedItems.map { it.copy(planned = false, checked = false, updatedAt = ts) }
             shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
+            checkedItems.forEach { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
             renderShopping()
             Thread { toReset.forEach { item ->
                 val ok = Api.updateShoppingItem(item)
@@ -730,6 +730,7 @@ class MainActivity : Activity() {
             }
             shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
             Prefs.saveShopping(this, shopping)
+            checked.forEach { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
             renderShopping()
             Thread { toReset.forEach { item ->
                 val ok = Api.updateShoppingItem(item)
@@ -930,14 +931,15 @@ class MainActivity : Activity() {
 
     private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
         if (section == Section.LISTE) {
-            val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_change_store), getString(R.string.action_delete))
+            val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_change_store), getString(R.string.action_recurrence), getString(R.string.action_delete))
             AlertDialog.Builder(this)
                 .setTitle(item.name)
                 .setItems(options) { _, idx ->
                     when (idx) {
                         0 -> showRenameListeItemDialog(item, sibling)
                         1 -> showStorePicker(item)
-                        2 -> {
+                        2 -> showRecurrenceDialog(item, sibling)
+                        3 -> {
                             val idsToDelete = listOfNotNull(item.id, sibling?.id).toSet()
                             shopping = shopping.filter { it.id !in idsToDelete }
                             Prefs.saveShopping(this, shopping)
@@ -974,6 +976,113 @@ class MainActivity : Activity() {
                     if (ok == null) showSyncError()
                 }.start()
             }
+            .show()
+    }
+
+    // ── Recurring items ───────────────────────────────────────────────────────
+
+    private fun checkAndAddRecurring() {
+        val recurring = Prefs.loadRecurring(this)
+        if (recurring.isEmpty()) return
+        val now = System.currentTimeMillis()
+        var changed = false
+        for (r in recurring) {
+            val dueMs = r.periodWeeks * 7L * 24 * 60 * 60 * 1000
+            if (now - r.lastBought < dueMs) continue
+            for (store in r.stores) {
+                val alreadyExists = shopping.any {
+                    it.store == store &&
+                    it.name.equals(r.name, ignoreCase = true) &&
+                    it.category == r.category
+                }
+                if (!alreadyExists) {
+                    val item = com.autholau.model.ShoppingItem(
+                        id        = java.util.UUID.randomUUID().toString(),
+                        name      = r.name,
+                        checked   = false,
+                        planned   = false,
+                        category  = r.category,
+                        store     = store,
+                        updatedAt = now
+                    )
+                    shopping = shopping + item
+                    changed  = true
+                    Thread {
+                        val created = Api.createShoppingItem(item)
+                        if (created != null) {
+                            shopping = shopping.map { if (it.id == item.id) created else it }
+                            Prefs.saveShopping(this, shopping)
+                        } else showSyncError()
+                    }.start()
+                }
+            }
+        }
+        if (changed) Prefs.saveShopping(this, shopping)
+    }
+
+    private fun showRecurrenceDialog(item: ShoppingItem, sibling: ShoppingItem?) {
+        val existing = Prefs.loadRecurring(this).firstOrNull {
+            it.name.equals(item.name, ignoreCase = true) && it.category == item.category
+        }
+
+        val weekOptions     = arrayOf("1 semaine", "2 semaines", "3 semaines", "4 semaines", "6 semaines", "8 semaines")
+        val weekValues      = intArrayOf(1, 2, 3, 4, 6, 8)
+
+        if (existing != null) {
+            // Show current config with options to modify or delete
+            val currentWeeks = existing.periodWeeks
+            val currentLabel = weekValues.indexOfFirst { it == currentWeeks }
+                .takeIf { it >= 0 }?.let { weekOptions[it] } ?: "$currentWeeks semaine(s)"
+            val options = arrayOf(
+                getString(R.string.action_edit_recurrence),
+                getString(R.string.action_disable_recurrence)
+            )
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_recurrence))
+                .setMessage("${getString(R.string.label_current_period)} $currentLabel")
+                .setItems(options) { _, idx ->
+                    when (idx) {
+                        0 -> showRecurrencePicker(item, sibling, weekOptions, weekValues, existing.periodWeeks)
+                        1 -> {
+                            val list = Prefs.loadRecurring(this).filter {
+                                !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
+                            }
+                            Prefs.saveRecurring(this, list)
+                        }
+                    }
+                }
+                .show()
+        } else {
+            showRecurrencePicker(item, sibling, weekOptions, weekValues, defaultWeeks = 4)
+        }
+    }
+
+    private fun showRecurrencePicker(
+        item: ShoppingItem, sibling: ShoppingItem?,
+        weekOptions: Array<String>, weekValues: IntArray,
+        defaultWeeks: Int
+    ) {
+        val defaultIdx = weekValues.indexOfFirst { it == defaultWeeks }.coerceAtLeast(0)
+        var selectedIdx = defaultIdx
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_recurrence))
+            .setSingleChoiceItems(weekOptions, defaultIdx) { _, idx -> selectedIdx = idx }
+            .setPositiveButton(getString(R.string.action_enable)) { _, _ ->
+                val stores = listOfNotNull(item.store, sibling?.store).distinct()
+                val list   = Prefs.loadRecurring(this).filter {
+                    !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)
+                }.toMutableList()
+                list.add(RecurringItem(
+                    name        = item.name,
+                    category    = item.category,
+                    stores      = stores,
+                    periodWeeks = weekValues[selectedIdx],
+                    lastBought  = System.currentTimeMillis()
+                ))
+                Prefs.saveRecurring(this, list)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 

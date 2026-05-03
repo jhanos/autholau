@@ -3,6 +3,7 @@ package com.autholau.storage
 import android.content.Context
 import android.content.SharedPreferences
 import com.autholau.model.Event
+import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import org.json.JSONArray
 import org.json.JSONObject
@@ -20,6 +21,7 @@ object Prefs {
     const val CALENDAR_ID       = "calendar_id"
     const val CALENDAR_ROW_MAP  = "calendar_row_map"
     const val COURSE_MODE       = "course_mode"
+    const val RECURRING_ITEMS   = "recurring_items"
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -182,5 +184,53 @@ object Prefs {
             val arr = JSONArray(raw)
             (0 until arr.length()).map { arr.getString(it) }
         } catch (_: Exception) { DEFAULT_CATEGORIES }
+    }
+
+    // ── Recurring items ───────────────────────────────────────────────────────
+
+    fun saveRecurring(ctx: Context, items: List<RecurringItem>) {
+        val arr = JSONArray()
+        items.forEach { r ->
+            arr.put(JSONObject().apply {
+                put("name",        r.name)
+                if (r.category != null) put("category", r.category)
+                val storesArr = JSONArray()
+                r.stores.forEach { storesArr.put(it) }
+                put("stores",      storesArr)
+                put("periodWeeks", r.periodWeeks)
+                put("lastBought",  r.lastBought)
+            })
+        }
+        get(ctx).edit().putString(RECURRING_ITEMS, arr.toString()).apply()
+    }
+
+    fun loadRecurring(ctx: Context): List<RecurringItem> {
+        val raw = get(ctx).getString(RECURRING_ITEMS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o      = arr.getJSONObject(i)
+                val sArr   = o.getJSONArray("stores")
+                val stores = (0 until sArr.length()).map { sArr.getString(it) }
+                RecurringItem(
+                    name        = o.getString("name"),
+                    category    = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
+                    stores      = stores,
+                    periodWeeks = o.getInt("periodWeeks"),
+                    lastBought  = o.optLong("lastBought", 0L)
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun updateRecurringLastBought(ctx: Context, name: String, category: String?, ts: Long) {
+        val list = loadRecurring(ctx).toMutableList()
+        val idx  = list.indexOfFirst {
+            it.name.equals(name, ignoreCase = true) && it.category == category
+        }
+        if (idx >= 0) {
+            list[idx] = list[idx].copy(lastBought = ts)
+            saveRecurring(ctx, list)
+        }
     }
 }

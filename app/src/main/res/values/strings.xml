@@ -60,4 +60,10 @@
     <string name="logs_empty">Aucun log pour l\'instant.</string>
     <string name="nav_course">Course</string>
     <string name="label_course_mode">Vue courses combinée</string>
+    <string name="action_recurrence">Récurrence</string>
+    <string name="title_recurrence">Récurrence</string>
+    <string name="label_current_period">Période actuelle :</string>
+    <string name="action_enable">Activer</string>
+    <string name="action_edit_recurrence">Modifier</string>
+    <string name="action_disable_recurrence">Supprimer la récurrence</string>
 </resources>
