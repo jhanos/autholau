@@ -118,6 +118,7 @@ class MainActivity : Activity() {
         events     = Prefs.loadEvents(this)
         shopping   = Prefs.loadShopping(this)
         categories = Prefs.loadCategories(this)
+        recurring  = Prefs.loadRecurring(this)
         renderSection()
         refresh()
     }
@@ -191,7 +192,7 @@ class MainActivity : Activity() {
                 tvTitle.text                = getString(R.string.nav_course)
                 rowShoppingInput.visibility = View.VISIBLE
                 btnAdd.visibility           = View.GONE
-                btnClearChecked.visibility  = View.VISIBLE
+                btnClearChecked.visibility  = View.GONE
                 renderShopping()
             }
             Section.LECLERC, Section.GRAND_FRAIS -> {
@@ -387,8 +388,8 @@ class MainActivity : Activity() {
 
             // ── Course (merged Leclerc + Grand Frais, planned only, tick = checked) ──
             Section.COURSE -> {
-                val leclercItems    = items.filter { it.store == "Leclerc"     && it.planned }
-                val grandFraisItems = items.filter { it.store == "Grand Frais" && it.planned }
+                val leclercItems    = items.filter { it.store == "Leclerc"     && (it.planned || it.id in gracePeriodIds) }
+                val grandFraisItems = items.filter { it.store == "Grand Frais" && (it.planned || it.id in gracePeriodIds) }
 
                 data class CKey(val name: String, val cat: String?)
                 val lMap    = leclercItems.associateBy    { CKey(it.name.lowercase(), it.category) }
@@ -602,16 +603,17 @@ class MainActivity : Activity() {
                             }
 
                             isCourse -> {
-                                // checked = all present siblings are checked
-                                val isChecked = s.checked && (sibling == null || sibling.checked)
-                                cb.isChecked = isChecked
+                                // In grace period: show as checked
+                                val displayChecked = (s.id in gracePeriodIds) ||
+                                    (s.checked && (sibling == null || sibling.checked))
+                                cb.isChecked = displayChecked
                                 val badge = when {
                                     sibling != null          -> " [L+GF]"
                                     s.store == "Grand Frais" -> " [GF]"
                                     else                     -> " [L]"
                                 }
                                 tv.text = s.name + badge
-                                if (isChecked) {
+                                if (displayChecked) {
                                     tv.paintFlags = tv.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                                     tv.setTextColor(getColor(R.color.muted))
                                 } else {
@@ -619,23 +621,54 @@ class MainActivity : Activity() {
                                     tv.setTextColor(getColor(R.color.text_primary))
                                 }
                                 cb.setOnCheckedChangeListener { _, checked ->
-                                    val ts = System.currentTimeMillis()
-                                    val updatedPrimary = s.copy(checked = checked, updatedAt = ts)
-                                    val updatedSibling = sibling?.copy(checked = checked, updatedAt = ts)
-                                    shopping = shopping.map { item ->
-                                        when (item.id) {
-                                            updatedPrimary.id  -> updatedPrimary
-                                            updatedSibling?.id -> updatedSibling
-                                            else               -> item
+                                    val ts  = System.currentTimeMillis()
+                                    val ids = listOfNotNull(s.id, sibling?.id)
+                                    if (checked) {
+                                        // Bought: reset planned=false, checked=false; enter grace period
+                                        val toReset = shopping.filter { it.id in ids }
+                                            .map { it.copy(planned = false, checked = false, updatedAt = ts) }
+                                        shopping = shopping.map { item ->
+                                            toReset.firstOrNull { it.id == item.id } ?: item
                                         }
+                                        Prefs.saveShopping(this@MainActivity, shopping)
+                                        ids.forEach { id ->
+                                            gracePeriodIds.add(id)
+                                            val runnable = Runnable {
+                                                gracePeriodIds.remove(id)
+                                                graceRunnables.remove(id)
+                                                renderShopping()
+                                            }
+                                            graceRunnables[id]?.let { graceHandler.removeCallbacks(it) }
+                                            graceRunnables[id] = runnable
+                                            graceHandler.postDelayed(runnable, 3_600_000L)
+                                        }
+                                        renderShopping()
+                                        Thread {
+                                            toReset.forEach { item ->
+                                                val ok = Api.updateShoppingItem(item)
+                                                if (ok == null) showSyncError()
+                                            }
+                                        }.start()
+                                    } else {
+                                        // Untick within grace: restore planned=true
+                                        ids.forEach { id ->
+                                            gracePeriodIds.remove(id)
+                                            graceRunnables.remove(id)?.let { graceHandler.removeCallbacks(it) }
+                                        }
+                                        val toRestore = shopping.filter { it.id in ids }
+                                            .map { it.copy(planned = true, checked = false, updatedAt = ts) }
+                                        shopping = shopping.map { item ->
+                                            toRestore.firstOrNull { it.id == item.id } ?: item
+                                        }
+                                        Prefs.saveShopping(this@MainActivity, shopping)
+                                        renderShopping()
+                                        Thread {
+                                            toRestore.forEach { item ->
+                                                val ok = Api.updateShoppingItem(item)
+                                                if (ok == null) showSyncError()
+                                            }
+                                        }.start()
                                     }
-                                    Prefs.saveShopping(this@MainActivity, shopping)
-                                    renderShopping()
-                                    Thread {
-                                        val ok1 = Api.updateShoppingItem(updatedPrimary)
-                                        val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
-                                        if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
-                                    }.start()
                                 }
                             }
 
@@ -756,31 +789,6 @@ class MainActivity : Activity() {
     // ── Shopping actions ──────────────────────────────────────────────────────
 
     private fun clearChecked() {
-        if (section == Section.COURSE) {
-            // Reset all fully-checked Course items (planned=false, checked=false) on both stores
-            val checkedItems = shopping
-                .filter { (it.store == "Leclerc" || it.store == "Grand Frais") && it.planned && it.checked }
-            if (checkedItems.isEmpty()) return
-            val ts = System.currentTimeMillis()
-            val toReset = checkedItems.map { it.copy(planned = false, checked = false, updatedAt = ts) }
-            shopping = shopping.map { item -> toReset.firstOrNull { it.id == item.id } ?: item }
-            Prefs.saveShopping(this, shopping)
-            val updatedRecurring = checkedItems.mapNotNull { Prefs.updateRecurringLastBought(this, it.name, it.category, ts) }
-            recurring = Prefs.loadRecurring(this)
-            renderShopping()
-            Thread {
-                toReset.forEach { item ->
-                    val ok = Api.updateShoppingItem(item)
-                    if (ok == null) showSyncError()
-                }
-                updatedRecurring.forEach { r ->
-                    val ok = Api.updateRecurring(r)
-                    if (ok == null) showSyncError()
-                }
-            }.start()
-            return
-        }
-
         // Autre: delete checked items permanently
         val store   = currentStore()
         val checked = shopping.filter { it.store == store && it.checked }
@@ -992,7 +1000,7 @@ class MainActivity : Activity() {
                 .setItems(options) { _, idx ->
                     when (idx) {
                         0 -> showRenameListeItemDialog(item, sibling)
-                        1 -> showStorePicker(item)
+                        1 -> showStorePicker(item, sibling)
                         2 -> showRecurrenceDialog(item, sibling)
                         3 -> {
                             val idsToDelete = listOfNotNull(item.id, sibling?.id).toSet()
@@ -1011,10 +1019,10 @@ class MainActivity : Activity() {
                 .show()
             return
         }
-        showStorePicker(item)
+        showStorePicker(item, null)
     }
 
-    private fun showStorePicker(item: ShoppingItem) {
+    private fun showStorePicker(item: ShoppingItem, sibling: ShoppingItem?) {
         val stores = arrayOf("Leclerc", "Grand Frais", "Autre")
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_move_store))
@@ -1023,12 +1031,20 @@ class MainActivity : Activity() {
                 if (newStore == item.store) return@setItems
                 val ts = System.currentTimeMillis()
                 val updated = item.copy(store = newStore, updatedAt = ts)
-                shopping = shopping.map { if (it.id == item.id) updated else it }
+                // Remove the sibling (it was the same item in another store; moving to newStore makes it a duplicate)
+                val idsToRemove = setOfNotNull(sibling?.id)
+                shopping = shopping
+                    .filter { it.id !in idsToRemove }
+                    .map { if (it.id == item.id) updated else it }
                 Prefs.saveShopping(this, shopping)
                 renderShopping()
                 Thread {
                     val ok = Api.updateShoppingItem(updated)
                     if (ok == null) showSyncError()
+                    idsToRemove.forEach { id ->
+                        val okDel = Api.deleteShoppingItem(id)
+                        if (!okDel) showSyncError()
+                    }
                 }.start()
             }
             .show()
@@ -1038,8 +1054,8 @@ class MainActivity : Activity() {
 
     private fun checkAndAddRecurring() {
         if (recurring.isEmpty()) return
-        val now = System.currentTimeMillis()
-        var changed = false
+        val now       = System.currentTimeMillis()
+        val toCreate  = mutableListOf<ShoppingItem>()
         for (r in recurring) {
             val dueMs = r.periodWeeks * 7L * 24 * 60 * 60 * 1000
             if (now - r.lastBought < dueMs) continue
@@ -1050,7 +1066,7 @@ class MainActivity : Activity() {
                     it.category == r.category
                 }
                 if (!alreadyExists) {
-                    val item = ShoppingItem(
+                    toCreate.add(ShoppingItem(
                         id        = java.util.UUID.randomUUID().toString(),
                         name      = r.name,
                         checked   = false,
@@ -1058,20 +1074,25 @@ class MainActivity : Activity() {
                         category  = r.category,
                         store     = store,
                         updatedAt = now
-                    )
-                    shopping = shopping + item
-                    changed  = true
-                    Thread {
-                        val created = Api.createShoppingItem(item)
-                        if (created != null) {
-                            shopping = shopping.map { if (it.id == item.id) created else it }
-                            Prefs.saveShopping(this, shopping)
-                        } else showSyncError()
-                    }.start()
+                    ))
                 }
             }
         }
-        if (changed) Prefs.saveShopping(this, shopping)
+        if (toCreate.isEmpty()) return
+        shopping = shopping + toCreate
+        Prefs.saveShopping(this, shopping)
+        renderShopping()
+        Thread {
+            for (item in toCreate) {
+                val created = Api.createShoppingItem(item)
+                if (created != null) {
+                    shopping = shopping.map { if (it.id == item.id) created else it }
+                } else {
+                    showSyncError()
+                }
+            }
+            Prefs.saveShopping(this, shopping)
+        }.start()
     }
 
     private fun showRecurrenceDialog(item: ShoppingItem, sibling: ShoppingItem?) {
@@ -1158,13 +1179,15 @@ class MainActivity : Activity() {
 
     private fun saveRecurringItem(item: ShoppingItem, sibling: ShoppingItem?, existing: RecurringItem?, weeks: Int) {
         val stores  = listOfNotNull(item.store, sibling?.store).distinct()
+        val ts      = System.currentTimeMillis()
         val newItem = RecurringItem(
             id          = existing?.id ?: java.util.UUID.randomUUID().toString(),
             name        = item.name,
             category    = item.category,
             stores      = stores,
             periodWeeks = weeks,
-            lastBought  = System.currentTimeMillis()
+            lastBought  = existing?.lastBought ?: ts,   // preserve lastBought on edit
+            updatedAt   = ts
         )
         recurring = recurring.filter {
             !(it.name.equals(item.name, ignoreCase = true) && it.category == item.category)

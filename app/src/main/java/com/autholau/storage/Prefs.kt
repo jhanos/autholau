@@ -200,6 +200,7 @@ object Prefs {
                 put("stores",      storesArr)
                 put("periodWeeks", r.periodWeeks)
                 put("lastBought",  r.lastBought)
+                put("updatedAt",   r.updatedAt)
             })
         }
         get(ctx).edit().putString(RECURRING_ITEMS, arr.toString()).apply()
@@ -208,31 +209,36 @@ object Prefs {
     fun loadRecurring(ctx: Context): List<RecurringItem> {
         val raw = get(ctx).getString(RECURRING_ITEMS, null) ?: return emptyList()
         return try {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).map { i ->
+            val arr  = JSONArray(raw)
+            var needsResave = false
+            val items = (0 until arr.length()).map { i ->
                 val o      = arr.getJSONObject(i)
-                val sArr   = o.getJSONArray("stores")
+                val sArr   = o.optJSONArray("stores") ?: JSONArray()
                 val stores = (0 until sArr.length()).map { sArr.getString(it) }
+                // Generate stable UUID if missing; flag for re-save so id persists
+                val id = o.optString("id", "").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: run { needsResave = true; java.util.UUID.randomUUID().toString() }
                 RecurringItem(
-                    id          = o.optString("id", java.util.UUID.randomUUID().toString()),
+                    id          = id,
                     name        = o.getString("name"),
-                    category    = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
+                    category    = o.optString("category", "").takeIf { it.isNotEmpty() && it != "null" },
                     stores      = stores,
-                    periodWeeks = o.getInt("periodWeeks"),
-                    lastBought  = o.optLong("lastBought", 0L)
+                    periodWeeks = o.optInt("periodWeeks", 4),
+                    lastBought  = o.optLong("lastBought", 0L),
+                    updatedAt   = o.optLong("updatedAt", 0L)
                 )
             }
+            if (needsResave) saveRecurring(ctx, items)
+            items
         } catch (_: Exception) { emptyList() }
     }
 
-    /** Updates lastBought for the matching entry, saves, and returns the updated item (or null if not found). */
-    fun updateRecurringLastBought(ctx: Context, name: String, category: String?, ts: Long): RecurringItem? {
+    /** Updates lastBought for the matching entry by id, saves, and returns the updated item (or null if not found). */
+    fun updateRecurringLastBought(ctx: Context, id: String, ts: Long): RecurringItem? {
         val list = loadRecurring(ctx).toMutableList()
-        val idx  = list.indexOfFirst {
-            it.name.equals(name, ignoreCase = true) && it.category == category
-        }
+        val idx  = list.indexOfFirst { it.id == id }
         if (idx < 0) return null
-        val updated = list[idx].copy(lastBought = ts)
+        val updated = list[idx].copy(lastBought = ts, updatedAt = ts)
         list[idx] = updated
         saveRecurring(ctx, list)
         return updated

@@ -222,7 +222,7 @@ object Api {
         put("stores",      arr)
         put("periodWeeks", r.periodWeeks)
         put("lastBought",  r.lastBought)
-        put("updatedAt",   r.lastBought)   // server uses updatedAt for conflict resolution
+        put("updatedAt",   r.updatedAt)
     }
 
     private fun parseRecurring(o: JSONObject): RecurringItem {
@@ -231,10 +231,11 @@ object Api {
         return RecurringItem(
             id          = o.getString("id"),
             name        = o.getString("name"),
-            category    = o.optString("category", null).takeIf { !it.isNullOrEmpty() },
+            category    = o.optString("category", "").takeIf { it.isNotEmpty() && it != "null" },
             stores      = stores,
             periodWeeks = o.optInt("periodWeeks", 4),
-            lastBought  = o.optLong("lastBought", 0L)
+            lastBought  = o.optLong("lastBought", 0L),
+            updatedAt   = o.optLong("updatedAt", 0L)
         )
     }
 
