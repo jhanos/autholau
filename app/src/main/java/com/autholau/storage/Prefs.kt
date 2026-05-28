@@ -3,6 +3,9 @@ package com.autholau.storage
 import android.content.Context
 import android.content.SharedPreferences
 import com.autholau.model.Event
+import com.autholau.model.Ingredient
+import com.autholau.model.MenuAssignment
+import com.autholau.model.MenuRecipe
 import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import org.json.JSONArray
@@ -23,6 +26,12 @@ object Prefs {
     const val COURSE_MODE       = "course_mode"
     const val RECURRING_ITEMS   = "recurring_items"
     const val PENDING_UPDATES   = "pending_updates"
+    const val MENUS_CACHE       = "menus_cache"
+    const val MENU_PLAN_CACHE   = "menu_plan_cache"
+    const val MENU_ACTIVE_DAYS  = "menu_active_days"
+
+    // Calendar.MONDAY=2, TUESDAY=3, THURSDAY=5, FRIDAY=6
+    val DEFAULT_MENU_DAYS = listOf(2, 3, 5, 6)
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -273,6 +282,105 @@ object Prefs {
                     category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() && it != "null" },
                     store     = o.optString("store", "Leclerc").ifEmpty { "Leclerc" },
                     updatedAt = o.optLong("updatedAt", 0L)
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Menu active days ──────────────────────────────────────────────────────
+
+    fun menuActiveDays(ctx: Context): List<Int> {
+        val str = get(ctx).getString(MENU_ACTIVE_DAYS, null) ?: return DEFAULT_MENU_DAYS
+        return try {
+            val arr = JSONArray(str)
+            (0 until arr.length()).map { arr.getInt(it) }
+        } catch (_: Exception) { DEFAULT_MENU_DAYS }
+    }
+
+    fun saveMenuActiveDays(ctx: Context, days: List<Int>) {
+        val arr = JSONArray()
+        days.forEach { arr.put(it) }
+        get(ctx).edit().putString(MENU_ACTIVE_DAYS, arr.toString()).apply()
+    }
+
+    // ── Menus (recipes) cache ─────────────────────────────────────────────────
+
+    fun saveMenus(ctx: Context, items: List<MenuRecipe>) {
+        val arr = JSONArray()
+        items.forEach { r ->
+            arr.put(JSONObject().apply {
+                put("id",        r.id)
+                put("name",      r.name)
+                put("category",  r.category)
+                put("updatedAt", r.updatedAt)
+                val ingArr = JSONArray()
+                r.ingredients.forEach { ing ->
+                    ingArr.put(JSONObject().apply {
+                        put("name", ing.name)
+                        if (ing.quantity != null) put("quantity", ing.quantity)
+                    })
+                }
+                put("ingredients", ingArr)
+            })
+        }
+        get(ctx).edit().putString(MENUS_CACHE, arr.toString()).apply()
+    }
+
+    fun loadMenus(ctx: Context): List<MenuRecipe> {
+        val raw = get(ctx).getString(MENUS_CACHE, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val ingArr = o.optJSONArray("ingredients") ?: JSONArray()
+                val ingredients = (0 until ingArr.length()).map { j ->
+                    val ing = ingArr.getJSONObject(j)
+                    Ingredient(
+                        name     = ing.getString("name"),
+                        quantity = ing.optString("quantity", null).takeIf { !it.isNullOrEmpty() && it != "null" }
+                    )
+                }
+                MenuRecipe(
+                    id          = o.getString("id"),
+                    name        = o.getString("name"),
+                    category    = o.optString("category", "plat").takeIf { it.isNotEmpty() && it != "null" } ?: "plat",
+                    ingredients = ingredients,
+                    updatedAt   = o.optLong("updatedAt", 0L)
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Menu plan cache ───────────────────────────────────────────────────────
+
+    fun saveMenuPlan(ctx: Context, items: List<MenuAssignment>) {
+        val arr = JSONArray()
+        items.forEach { a ->
+            arr.put(JSONObject().apply {
+                put("id",        a.id)
+                put("date",      a.date)
+                put("updatedAt", a.updatedAt)
+                if (a.platId       != null) put("platId",       a.platId)
+                if (a.fruitId      != null) put("fruitId",      a.fruitId)
+                if (a.oleagineuxId != null) put("oleagineuxId", a.oleagineuxId)
+            })
+        }
+        get(ctx).edit().putString(MENU_PLAN_CACHE, arr.toString()).apply()
+    }
+
+    fun loadMenuPlan(ctx: Context): List<MenuAssignment> {
+        val raw = get(ctx).getString(MENU_PLAN_CACHE, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                MenuAssignment(
+                    id           = o.getString("id"),
+                    date         = o.getString("date"),
+                    platId       = o.optString("platId",       null).takeIf { !it.isNullOrEmpty() && it != "null" },
+                    fruitId      = o.optString("fruitId",      null).takeIf { !it.isNullOrEmpty() && it != "null" },
+                    oleagineuxId = o.optString("oleagineuxId", null).takeIf { !it.isNullOrEmpty() && it != "null" },
+                    updatedAt    = o.optLong("updatedAt", 0L)
                 )
             }
         } catch (_: Exception) { emptyList() }

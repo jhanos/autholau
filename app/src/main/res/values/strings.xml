@@ -66,4 +66,26 @@
     <string name="action_enable">Activer</string>
     <string name="action_edit_recurrence">Modifier</string>
     <string name="action_disable_recurrence">Supprimer la récurrence</string>
+    <string name="nav_menus">Menus</string>
+    <string name="nav_recettes">Recettes</string>
+    <string name="label_menus_recipes">Mes recettes</string>
+    <string name="hint_new_recipe">Nouvelle recette…</string>
+    <string name="title_assign_menu">Choisir un menu</string>
+    <string name="title_add_ingredient">Ajouter un ingrédient</string>
+    <string name="title_delete_recipe">Supprimer la recette ?</string>
+    <string name="title_rename_recipe">Renommer la recette</string>
+    <string name="hint_ingredient_name">Nom de l\'ingrédient</string>
+    <string name="hint_ingredient_qty">Quantité (optionnel, ex. 500g)</string>
+    <string name="action_add_ingredient">+ Ajouter un ingrédient</string>
+    <string name="label_menu_days">Jours du menu</string>
+    <string name="empty_menus">Aucune recette — tapez un nom ci-dessus pour en créer une</string>
+    <string name="label_plat">Plat</string>
+    <string name="label_fruit">Fruit</string>
+    <string name="label_oleagineux">Oléagineux</string>
+    <string name="hint_fruit">Fruit du jour (optionnel)</string>
+    <string name="hint_oleagineux">Oléagineux (optionnel)</string>
+    <string name="title_add_item">Ajouter un élément</string>
+    <string name="label_category">Catégorie</string>
+    <string name="title_assign_day">Planifier ce jour</string>
+    <string name="label_none_assigned">— Aucun —</string>
 </resources>

@@ -4,7 +4,9 @@
       "Bash(export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64)",
       "Bash(export ANDROID_HOME=/opt/android-sdk)",
       "Bash(/opt/gradle/gradle-8.4/bin/gradle assembleRelease -x lint --project-dir /home/jhanos/git/perso/autholau -Dhttp.proxyHost=172.23.194.209 -Dhttp.proxyPort=43051 -Dhttps.proxyHost=172.23.194.209 -Dhttps.proxyPort=43051)",
-      "Bash(rtk *)"
+      "Bash(rtk *)",
+      "Bash(/opt/gradle/gradle-8.4/bin/gradle compileReleaseKotlin --project-dir /home/jhanos/git/perso/autholau -Dhttp.proxyHost=172.23.194.209 -Dhttp.proxyPort=43051 -Dhttps.proxyHost=172.23.194.209 -Dhttps.proxyPort=43051)",
+      "Bash(/opt/gradle/gradle-8.4/bin/gradle *)"
     ]
   }
 }

@@ -323,3 +323,81 @@ def delete_recurring(item_id: str) -> bool:
         return False
     _write("recurring.json", new_items)
     return True
+
+
+# --- Menus (recipes) ---
+
+def get_menus() -> list[dict]:
+    return _read("menus.json")
+
+
+def get_menu(menu_id: str) -> dict | None:
+    return next((m for m in get_menus() if m["id"] == menu_id), None)
+
+
+def create_menu(menu: dict) -> dict:
+    menus = get_menus()
+    menus.append(menu)
+    _write("menus.json", menus)
+    return menu
+
+
+def update_menu(menu_id: str, incoming: dict) -> tuple[dict | None, bool]:
+    menus = get_menus()
+    for i, m in enumerate(menus):
+        if m["id"] == menu_id:
+            if incoming.get("updatedAt", 0) >= m.get("updatedAt", 0):
+                menus[i] = incoming
+                _write("menus.json", menus)
+                return incoming, True
+            else:
+                return m, False
+    return None, False
+
+
+def delete_menu(menu_id: str) -> bool:
+    menus = get_menus()
+    new_menus = [m for m in menus if m["id"] != menu_id]
+    if len(new_menus) == len(menus):
+        return False
+    _write("menus.json", new_menus)
+    return True
+
+
+# --- Menu plan (day assignments) ---
+
+def get_menu_plan() -> list[dict]:
+    return _read("menu_plan.json")
+
+
+def get_menu_assignment(assignment_id: str) -> dict | None:
+    return next((a for a in get_menu_plan() if a["id"] == assignment_id), None)
+
+
+def create_menu_assignment(assignment: dict) -> dict:
+    items = get_menu_plan()
+    items.append(assignment)
+    _write("menu_plan.json", items)
+    return assignment
+
+
+def update_menu_assignment(assignment_id: str, incoming: dict) -> tuple[dict | None, bool]:
+    items = get_menu_plan()
+    for i, item in enumerate(items):
+        if item["id"] == assignment_id:
+            if incoming.get("updatedAt", 0) >= item.get("updatedAt", 0):
+                items[i] = incoming
+                _write("menu_plan.json", items)
+                return incoming, True
+            else:
+                return item, False
+    return None, False
+
+
+def delete_menu_assignment(assignment_id: str) -> bool:
+    items = get_menu_plan()
+    new_items = [a for a in items if a["id"] != assignment_id]
+    if len(new_items) == len(items):
+        return False
+    _write("menu_plan.json", new_items)
+    return True

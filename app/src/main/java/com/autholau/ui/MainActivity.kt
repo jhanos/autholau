@@ -13,6 +13,9 @@ import android.view.ViewGroup
 import android.widget.*
 import com.autholau.R
 import com.autholau.model.Event
+import com.autholau.model.Ingredient
+import com.autholau.model.MenuAssignment
+import com.autholau.model.MenuRecipe
 import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import com.autholau.calendar.CalendarSync
@@ -24,7 +27,7 @@ import java.time.format.DateTimeFormatter
 
 class MainActivity : Activity() {
 
-    private enum class Section { EVENTS, LISTE, COURSE, LECLERC, GRAND_FRAIS, AUTRE }
+    private enum class Section { EVENTS, LISTE, COURSE, LECLERC, GRAND_FRAIS, AUTRE, MENUS, RECETTES }
 
     private var section = Section.EVENTS
 
@@ -39,13 +42,18 @@ class MainActivity : Activity() {
     private lateinit var btnAdd:           ImageButton
     private lateinit var btnClearChecked:  ImageButton
     private lateinit var btnRefresh:       ImageButton
+    private lateinit var rowMenuNav:       View
+    private lateinit var tvMenuWeek:       TextView
 
     // Data
     private var events:     List<Event>         = emptyList()
     private var shopping:   List<ShoppingItem>  = emptyList()
     private var categories: List<String>        = emptyList()
     private var recurring:  List<RecurringItem> = emptyList()
+    private var menus:      List<MenuRecipe>    = emptyList()
+    private var menuPlan:   List<MenuAssignment> = emptyList()
     private var searchQuery: String             = ""
+    private var menuWeekOffset: Int             = 0
 
     // Grace period (items kept visible in store list for 1h after being bought)
     private val gracePeriodIds = mutableSetOf<String>()
@@ -70,6 +78,8 @@ class MainActivity : Activity() {
         etNewItem        = findViewById(R.id.etNewItem)
         btnAdd           = findViewById(R.id.btnAdd)
         btnClearChecked  = findViewById(R.id.btnClearChecked)
+        rowMenuNav       = findViewById(R.id.rowMenuNav)
+        tvMenuWeek       = findViewById(R.id.tvMenuWeek)
 
         findViewById<ImageButton>(R.id.btnDrawer).setOnClickListener { toggleDrawer() }
         btnRefresh = findViewById(R.id.btnRefresh)
@@ -82,11 +92,23 @@ class MainActivity : Activity() {
             override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 searchQuery = s?.toString()?.trim() ?: ""
-                if (section != Section.EVENTS) renderShopping()
+                if (section != Section.EVENTS && section != Section.MENUS && section != Section.RECETTES) renderShopping()
             }
         })
-        findViewById<ImageButton>(R.id.btnAddItem).setOnClickListener { showAddItemDialog() }
-        etNewItem.setOnEditorActionListener { _, _, _ -> showAddItemDialog(); true }
+        val addAction = { showAddItemDialog() }
+        findViewById<ImageButton>(R.id.btnAddItem).setOnClickListener { addAction() }
+        etNewItem.setOnEditorActionListener { _, _, _ -> addAction(); true }
+
+        findViewById<TextView>(R.id.btnMenuPrevWeek).setOnClickListener {
+            menuWeekOffset--
+            tvMenuWeek.text = weekLabel(menuWeekOffset)
+            renderMenus()
+        }
+        findViewById<TextView>(R.id.btnMenuNextWeek).setOnClickListener {
+            menuWeekOffset++
+            tvMenuWeek.text = weekLabel(menuWeekOffset)
+            renderMenus()
+        }
 
         scrim.setOnClickListener { closeDrawer() }
         findViewById<TextView>(R.id.navEvents).setOnClickListener     { switchSection(Section.EVENTS);      closeDrawer() }
@@ -95,6 +117,8 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.navLeclerc).setOnClickListener    { switchSection(Section.LECLERC);     closeDrawer() }
         findViewById<TextView>(R.id.navGrandFrais).setOnClickListener { switchSection(Section.GRAND_FRAIS); closeDrawer() }
         findViewById<TextView>(R.id.navAutre).setOnClickListener      { switchSection(Section.AUTRE);       closeDrawer() }
+        findViewById<TextView>(R.id.navMenus).setOnClickListener      { switchSection(Section.MENUS);       closeDrawer() }
+        findViewById<TextView>(R.id.navRecettes).setOnClickListener   { switchSection(Section.RECETTES);    closeDrawer() }
 
         // Show/hide Course vs Leclerc+Grand Frais based on courseMode pref
         val courseMode = Prefs.courseMode(this)
@@ -119,6 +143,8 @@ class MainActivity : Activity() {
         shopping   = Prefs.loadShopping(this)
         categories = Prefs.loadCategories(this)
         recurring  = Prefs.loadRecurring(this)
+        menus      = Prefs.loadMenus(this)
+        menuPlan   = Prefs.loadMenuPlan(this)
         renderSection()
         refresh()
     }
@@ -129,6 +155,8 @@ class MainActivity : Activity() {
         shopping   = Prefs.loadShopping(this)
         categories = Prefs.loadCategories(this)
         recurring  = Prefs.loadRecurring(this)
+        menus      = Prefs.loadMenus(this)
+        menuPlan   = Prefs.loadMenuPlan(this)
         checkAndAddRecurring()
         renderSection()
     }
@@ -162,6 +190,7 @@ class MainActivity : Activity() {
         section = s
         searchQuery = ""
         etNewItem.setText("")
+        if (s != Section.MENUS && s != Section.RECETTES) etNewItem.hint = getString(R.string.hint_search_add)
         renderSection()
     }
 
@@ -173,6 +202,7 @@ class MainActivity : Activity() {
     }
 
     private fun renderSection() {
+        rowMenuNav.visibility = View.GONE
         when (section) {
             Section.EVENTS -> {
                 tvTitle.text                = getString(R.string.nav_events)
@@ -211,6 +241,23 @@ class MainActivity : Activity() {
                 btnAdd.visibility           = View.GONE
                 btnClearChecked.visibility  = View.VISIBLE
                 renderShopping()
+            }
+            Section.MENUS -> {
+                tvTitle.text                = getString(R.string.nav_menus)
+                rowShoppingInput.visibility = View.GONE
+                rowMenuNav.visibility       = View.VISIBLE
+                tvMenuWeek.text             = weekLabel(menuWeekOffset)
+                btnAdd.visibility           = View.GONE
+                btnClearChecked.visibility  = View.GONE
+                renderMenus()
+            }
+            Section.RECETTES -> {
+                tvTitle.text                = getString(R.string.nav_recettes)
+                rowShoppingInput.visibility = View.GONE
+                rowMenuNav.visibility       = View.GONE
+                btnAdd.visibility           = View.VISIBLE
+                btnClearChecked.visibility  = View.GONE
+                renderRecettes()
             }
         }
     }
@@ -1243,7 +1290,10 @@ class MainActivity : Activity() {
 
     // ── Sync ──────────────────────────────────────────────────────────────────
 
-    private fun onAdd() { startActivity(Intent(this, EventFormActivity::class.java)) }
+    private fun onAdd() {
+        if (section == Section.RECETTES) addMenuItemDialog()
+        else startActivity(Intent(this, EventFormActivity::class.java))
+    }
 
     private var lastSyncErrorShownAt: Long = 0
 
@@ -1274,9 +1324,11 @@ class MainActivity : Activity() {
             val newShopping   = Api.getShopping()
             val newCategories = Api.getCategories()
             val newRecurring  = Api.getRecurring()
+            val newMenus      = Api.getMenus()
+            val newMenuPlan   = Api.getMenuPlan()
             runOnUiThread {
                 btnRefresh.isEnabled = true
-                if (newEvents == null && newShopping == null && newCategories == null && newRecurring == null) {
+                if (newEvents == null && newShopping == null && newCategories == null && newRecurring == null && newMenus == null && newMenuPlan == null) {
                     Toast.makeText(this, getString(R.string.err_network), Toast.LENGTH_SHORT).show()
                 }
                 if (newEvents != null) {
@@ -1310,8 +1362,479 @@ class MainActivity : Activity() {
                     recurring = newRecurring
                     Prefs.saveRecurring(this, recurring)
                 }
+                if (newMenus != null) {
+                    val serverIds = newMenus.map { it.id }.toSet()
+                    val localOnly = menus.filter { it.id !in serverIds }
+                    menus = newMenus + localOnly
+                    Prefs.saveMenus(this, menus)
+                }
+                if (newMenuPlan != null) {
+                    val serverIds = newMenuPlan.map { it.id }.toSet()
+                    val localOnly = menuPlan.filter { it.id !in serverIds }
+                    menuPlan = newMenuPlan + localOnly
+                    Prefs.saveMenuPlan(this, menuPlan)
+                }
                 renderSection()
             }
         }.start()
+    }
+
+    // ── Menus ─────────────────────────────────────────────────────────────────
+
+    private data class MenuDayRow(
+        val dayName: String,
+        val date: String,
+        val plat: MenuRecipe?,
+        val fruit: MenuRecipe?,
+        val oleagineux: MenuRecipe?
+    )
+
+    private fun renderMenus() {
+        val activeDays    = Prefs.menuActiveDays(this).sorted()
+        val assignByDate  = menuPlan.associateBy { it.date }
+        val recipesById   = menus.associateBy { it.id }
+        val rows = activeDays.map { dayOfWeek ->
+            val date       = dateForDayInWeek(menuWeekOffset, dayOfWeek)
+            val label      = dayName(dayOfWeek) + " " + date.substring(8, 10) + "/" + date.substring(5, 7)
+            val assignment = assignByDate[date]
+            MenuDayRow(
+                dayName    = label,
+                date       = date,
+                plat       = assignment?.platId?.let { recipesById[it] },
+                fruit      = assignment?.fruitId?.let { recipesById[it] },
+                oleagineux = assignment?.oleagineuxId?.let { recipesById[it] }
+            )
+        }
+
+        tvEmpty.visibility = View.GONE
+
+        listView.adapter = object : BaseAdapter() {
+            override fun getCount()          = rows.size
+            override fun getItem(pos: Int)   = rows[pos]
+            override fun getItemId(pos: Int) = pos.toLong()
+
+            override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
+                val row = rows[pos]
+                val v   = convertView ?: layoutInflater.inflate(R.layout.row_menu_day, parent, false)
+                v.findViewById<TextView>(R.id.tvDayName).text = row.dayName
+                val tvPlat = v.findViewById<TextView>(R.id.tvDayPlat)
+                val tvFruit = v.findViewById<TextView>(R.id.tvDayFruit)
+                val tvOleag = v.findViewById<TextView>(R.id.tvDayOleagineux)
+                if (row.plat != null) {
+                    tvPlat.text = row.plat.name
+                    tvPlat.setTextColor(getColor(R.color.primary))
+                } else {
+                    tvPlat.text = "—"
+                    tvPlat.setTextColor(getColor(R.color.muted))
+                }
+                tvFruit.text = row.fruit?.name ?: ""
+                tvOleag.text = row.oleagineux?.name ?: ""
+                return v
+            }
+        }
+
+        listView.setOnItemClickListener { _, _, pos, _ ->
+            showAssignMenuDialog(rows[pos])
+        }
+    }
+
+    private sealed class RecetteRow {
+        data class Header(val title: String) : RecetteRow()
+        data class Item(val recipe: MenuRecipe) : RecetteRow()
+    }
+
+    private fun renderRecettes() {
+        val platItems  = menus.filter { it.category == "plat"       }.sortedBy { it.name }
+        val fruitItems = menus.filter { it.category == "fruit"      }.sortedBy { it.name }
+        val oleagItems = menus.filter { it.category == "oleagineux" }.sortedBy { it.name }
+
+        val rows = mutableListOf<RecetteRow>()
+        rows += RecetteRow.Header(getString(R.string.label_plat))
+        rows += platItems.map  { RecetteRow.Item(it) }
+        rows += RecetteRow.Header(getString(R.string.label_fruit))
+        rows += fruitItems.map { RecetteRow.Item(it) }
+        rows += RecetteRow.Header(getString(R.string.label_oleagineux))
+        rows += oleagItems.map { RecetteRow.Item(it) }
+
+        tvEmpty.visibility = View.GONE
+
+        listView.adapter = object : BaseAdapter() {
+            private val TYPE_HEADER = 0
+            private val TYPE_ITEM   = 1
+            override fun getCount()           = rows.size
+            override fun getItem(pos: Int)    = rows[pos]
+            override fun getItemId(pos: Int)  = pos.toLong()
+            override fun getViewTypeCount()   = 2
+            override fun getItemViewType(pos: Int) = if (rows[pos] is RecetteRow.Header) TYPE_HEADER else TYPE_ITEM
+            override fun isEnabled(pos: Int)  = rows[pos] is RecetteRow.Item
+
+            override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
+                return when (val row = rows[pos]) {
+                    is RecetteRow.Header -> {
+                        val v = convertView ?: TextView(this@MainActivity).apply {
+                            textSize = 11f
+                            setTextColor(getColor(R.color.text_secondary))
+                            isAllCaps = true
+                            setPadding(64, 32, 64, 8)
+                        }
+                        (v as TextView).text = row.title
+                        v
+                    }
+                    is RecetteRow.Item -> {
+                        val recipe = row.recipe
+                        val v = convertView ?: layoutInflater.inflate(R.layout.row_menu_recipe, parent, false)
+                        v.findViewById<TextView>(R.id.tvRecipeName).text = recipe.name
+                        val count = recipe.ingredients.size
+                        v.findViewById<TextView>(R.id.tvIngCount).text =
+                            if (recipe.category == "plat" && count > 0) "$count ing." else ""
+                        v.findViewById<ImageButton>(R.id.btnEditRecipe).setOnClickListener {
+                            showEditRecipeDialog(recipe)
+                        }
+                        v.findViewById<ImageButton>(R.id.btnDeleteRecipe).setOnClickListener {
+                            confirmDeleteRecipe(recipe)
+                        }
+                        v
+                    }
+                }
+            }
+        }
+    }
+
+    private fun addMenuItemDialog() {
+        val categories = arrayOf(
+            getString(R.string.label_plat),
+            getString(R.string.label_fruit),
+            getString(R.string.label_oleagineux)
+        )
+        val categoryKeys = arrayOf("plat", "fruit", "oleagineux")
+        var selectedCategoryIdx = 0
+
+        val etName = EditText(this).apply {
+            hint = getString(R.string.hint_new_recipe)
+            setTextColor(getColor(R.color.text_primary))
+            setHintTextColor(getColor(R.color.text_secondary))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categories)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) { selectedCategoryIdx = pos }
+                override fun onNothingSelected(p: AdapterView<*>?) {}
+            }
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(spinner)
+            addView(etName)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_add_item))
+            .setView(layout)
+            .setPositiveButton(getString(R.string.action_add)) { _, _ ->
+                val name = etName.text.toString().trim()
+                if (name.isEmpty()) return@setPositiveButton
+                val recipe = MenuRecipe(
+                    id          = java.util.UUID.randomUUID().toString(),
+                    name        = name,
+                    category    = categoryKeys[selectedCategoryIdx],
+                    ingredients = emptyList(),
+                    updatedAt   = System.currentTimeMillis()
+                )
+                menus = menus + recipe
+                Prefs.saveMenus(this, menus)
+                renderSection()
+                Thread { if (Api.createMenu(recipe) == null) showSyncError() }.start()
+                if (recipe.category == "plat") showEditRecipeDialog(recipe)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAssignMenuDialog(row: MenuDayRow) {
+        val noneLabel = getString(R.string.label_none_assigned)
+
+        val platItems  = listOf<MenuRecipe?>(null) + menus.filter { it.category == "plat"       }.sortedBy { it.name }
+        val fruitItems = listOf<MenuRecipe?>(null) + menus.filter { it.category == "fruit"      }.sortedBy { it.name }
+        val oleagItems = listOf<MenuRecipe?>(null) + menus.filter { it.category == "oleagineux" }.sortedBy { it.name }
+
+        fun makeSpinner(items: List<MenuRecipe?>, current: MenuRecipe?): Spinner {
+            val labels = items.map { it?.name ?: noneLabel }
+            val sp = Spinner(this).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, labels)
+                val idx = items.indexOfFirst { it?.id == current?.id }.coerceAtLeast(0)
+                setSelection(idx)
+            }
+            return sp
+        }
+
+        val spPlat  = makeSpinner(platItems,  row.plat)
+        val spFruit = makeSpinner(fruitItems, row.fruit)
+        val spOleag = makeSpinner(oleagItems, row.oleagineux)
+
+        fun label(text: String) = TextView(this).apply {
+            this.text = text
+            textSize  = 12f
+            setTextColor(getColor(R.color.text_secondary))
+            isAllCaps = true
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 16 }
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 8)
+            addView(label(getString(R.string.label_plat)));       addView(spPlat)
+            addView(label(getString(R.string.label_fruit)));      addView(spFruit)
+            addView(label(getString(R.string.label_oleagineux))); addView(spOleag)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(row.dayName)
+            .setView(layout)
+            .setPositiveButton(getString(R.string.action_save)) { _, _ ->
+                val selPlat  = platItems[spPlat.selectedItemPosition]
+                val selFruit = fruitItems[spFruit.selectedItemPosition]
+                val selOleag = oleagItems[spOleag.selectedItemPosition]
+                assignMenu(row.date, selPlat, selFruit, selOleag)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun assignMenu(date: String, plat: MenuRecipe?, fruit: MenuRecipe?, oleagineux: MenuRecipe?) {
+        val ts       = System.currentTimeMillis()
+        val existing = menuPlan.firstOrNull { it.date == date }
+        if (plat == null && fruit == null && oleagineux == null) {
+            if (existing == null) return
+            menuPlan = menuPlan.filter { it.date != date }
+            Prefs.saveMenuPlan(this, menuPlan)
+            renderSection()
+            Thread { if (!Api.deleteMenuAssignment(existing.id)) showSyncError() }.start()
+        } else if (existing != null) {
+            val updated = existing.copy(
+                platId       = plat?.id,
+                fruitId      = fruit?.id,
+                oleagineuxId = oleagineux?.id,
+                updatedAt    = ts
+            )
+            menuPlan = menuPlan.map { if (it.id == existing.id) updated else it }
+            Prefs.saveMenuPlan(this, menuPlan)
+            renderSection()
+            Thread { if (Api.updateMenuAssignment(updated) == null) showSyncError() }.start()
+        } else {
+            val assignment = MenuAssignment(
+                id           = java.util.UUID.randomUUID().toString(),
+                date         = date,
+                platId       = plat?.id,
+                fruitId      = fruit?.id,
+                oleagineuxId = oleagineux?.id,
+                updatedAt    = ts
+            )
+            menuPlan = menuPlan + assignment
+            Prefs.saveMenuPlan(this, menuPlan)
+            renderSection()
+            Thread { if (Api.createMenuAssignment(assignment) == null) showSyncError() }.start()
+        }
+    }
+
+    private fun showEditRecipeDialog(recipe: MenuRecipe) {
+        if (recipe.category != "plat") {
+            showRenameRecipeDialog(recipe)
+            return
+        }
+
+        val ingredients = recipe.ingredients.toMutableList()
+        val ingContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        fun refreshIngList() {
+            ingContainer.removeAllViews()
+            ingredients.forEachIndexed { i, ing ->
+                val row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity     = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(0, 4, 0, 4)
+                }
+                val tv = TextView(this@MainActivity).apply {
+                    text = if (ing.quantity != null) "${ing.name} — ${ing.quantity}" else ing.name
+                    textSize = 14f
+                    setTextColor(getColor(R.color.text_primary))
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                val btnDel = ImageButton(this@MainActivity).apply {
+                    setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    setOnClickListener { ingredients.removeAt(i); refreshIngList() }
+                }
+                row.addView(tv); row.addView(btnDel)
+                ingContainer.addView(row)
+            }
+        }
+        refreshIngList()
+
+        val btnAddIng = Button(this).apply {
+            text = getString(R.string.action_add_ingredient)
+            setTextColor(getColor(R.color.primary))
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            setOnClickListener {
+                showAddIngredientDialog { newIng -> ingredients.add(newIng); refreshIngList() }
+            }
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(ingContainer)
+            addView(btnAddIng)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(recipe.name)
+            .setView(ScrollView(this).apply { addView(layout) })
+            .setPositiveButton(getString(R.string.action_save)) { _, _ ->
+                val updated = recipe.copy(ingredients = ingredients.toList(), updatedAt = System.currentTimeMillis())
+                menus = menus.map { if (it.id == recipe.id) updated else it }
+                Prefs.saveMenus(this, menus)
+                renderSection()
+                Thread { if (Api.updateMenu(updated) == null) showSyncError() }.start()
+            }
+            .setNeutralButton(getString(R.string.action_rename)) { _, _ -> showRenameRecipeDialog(recipe) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAddIngredientDialog(callback: (Ingredient) -> Unit) {
+        val etName = EditText(this).apply {
+            hint = getString(R.string.hint_ingredient_name)
+            setTextColor(getColor(R.color.text_primary))
+            setHintTextColor(getColor(R.color.text_secondary))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val etQty = EditText(this).apply {
+            hint = getString(R.string.hint_ingredient_qty)
+            setTextColor(getColor(R.color.text_primary))
+            setHintTextColor(getColor(R.color.text_secondary))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 16 }
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(etName); addView(etQty)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_add_ingredient))
+            .setView(layout)
+            .setPositiveButton(getString(R.string.action_add)) { _, _ ->
+                val name = etName.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    val qty = etQty.text.toString().trim().takeIf { it.isNotEmpty() }
+                    callback(Ingredient(name, qty))
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showRenameRecipeDialog(recipe: MenuRecipe) {
+        val etName = EditText(this).apply {
+            setText(recipe.name)
+            selectAll()
+            setTextColor(getColor(R.color.text_primary))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(etName)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_rename_recipe))
+            .setView(layout)
+            .setPositiveButton(getString(R.string.action_save)) { _, _ ->
+                val newName = etName.text.toString().trim()
+                if (newName.isEmpty()) return@setPositiveButton
+                val updated = recipe.copy(name = newName, updatedAt = System.currentTimeMillis())
+                menus = menus.map { if (it.id == recipe.id) updated else it }
+                Prefs.saveMenus(this, menus)
+                renderSection()
+                Thread { if (Api.updateMenu(updated) == null) showSyncError() }.start()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun confirmDeleteRecipe(recipe: MenuRecipe) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_delete_recipe))
+            .setMessage(recipe.name)
+            .setPositiveButton(getString(R.string.action_delete)) { _, _ ->
+                val id = recipe.id
+                val toDeleteAssignments = menuPlan.filter {
+                    it.platId == id || it.fruitId == id || it.oleagineuxId == id
+                }
+                menuPlan = menuPlan.filter {
+                    it.platId != id && it.fruitId != id && it.oleagineuxId != id
+                }
+                menus = menus.filter { it.id != recipe.id }
+                Prefs.saveMenus(this, menus)
+                Prefs.saveMenuPlan(this, menuPlan)
+                renderSection()
+                Thread {
+                    toDeleteAssignments.forEach { Api.deleteMenuAssignment(it.id) }
+                    if (!Api.deleteMenu(recipe.id)) showSyncError()
+                }.start()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // ── Menu date helpers ─────────────────────────────────────────────────────
+
+    private fun weekLabel(offset: Int): String {
+        val cal = java.util.Calendar.getInstance()
+        cal.firstDayOfWeek = java.util.Calendar.MONDAY
+        cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
+        cal.add(java.util.Calendar.WEEK_OF_YEAR, offset)
+        val d1 = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val m1 = cal.get(java.util.Calendar.MONTH) + 1
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 6)
+        val d2 = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val m2 = cal.get(java.util.Calendar.MONTH) + 1
+        return "Semaine du %02d/%02d au %02d/%02d".format(d1, m1, d2, m2)
+    }
+
+    private fun dateForDayInWeek(weekOffset: Int, dayOfWeek: Int): String {
+        val cal = java.util.Calendar.getInstance()
+        cal.firstDayOfWeek = java.util.Calendar.MONDAY
+        cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
+        cal.add(java.util.Calendar.WEEK_OF_YEAR, weekOffset)
+        // Calendar.MONDAY=2; offset from Monday: (dayOfWeek - 2 + 7) % 7
+        val offset = (dayOfWeek - java.util.Calendar.MONDAY + 7) % 7
+        cal.add(java.util.Calendar.DAY_OF_YEAR, offset)
+        return "%04d-%02d-%02d".format(
+            cal.get(java.util.Calendar.YEAR),
+            cal.get(java.util.Calendar.MONTH) + 1,
+            cal.get(java.util.Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    private fun dayName(dayOfWeek: Int): String = when (dayOfWeek) {
+        java.util.Calendar.MONDAY    -> "Lundi"
+        java.util.Calendar.TUESDAY   -> "Mardi"
+        java.util.Calendar.WEDNESDAY -> "Mercredi"
+        java.util.Calendar.THURSDAY  -> "Jeudi"
+        java.util.Calendar.FRIDAY    -> "Vendredi"
+        java.util.Calendar.SATURDAY  -> "Samedi"
+        else                         -> "Dimanche"
     }
 }

@@ -160,6 +160,34 @@
             android:layout_marginTop="24dp"
             android:layout_marginBottom="24dp"/>
 
+        <!-- ── Menu days ──────────────────────────────────────────────────── -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_menu_days"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.1"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:id="@+id/layoutMenuDays"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- ── Divider ────────────────────────────────────────────────────── -->
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp"/>
+
         <!-- ── Calendar sync ──────────────────────────────────────────────── -->
 
         <LinearLayout

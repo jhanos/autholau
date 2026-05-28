@@ -27,7 +27,18 @@ class SettingsActivity : Activity() {
     private lateinit var tvCalendarLabel: TextView
     private lateinit var spinnerCalendar: Spinner
     private lateinit var tvCalendarError: TextView
+    private lateinit var layoutMenuDays:  LinearLayout
     private var categories: MutableList<String> = mutableListOf()
+
+    private val allDays = listOf(
+        java.util.Calendar.MONDAY    to "Lundi",
+        java.util.Calendar.TUESDAY   to "Mardi",
+        java.util.Calendar.WEDNESDAY to "Mercredi",
+        java.util.Calendar.THURSDAY  to "Jeudi",
+        java.util.Calendar.FRIDAY    to "Vendredi",
+        java.util.Calendar.SATURDAY  to "Samedi",
+        java.util.Calendar.SUNDAY    to "Dimanche"
+    )
 
     // calendars as (id, name) — populated when permission is granted
     private var calendarList: List<Pair<Long, String>> = emptyList()
@@ -82,6 +93,23 @@ class SettingsActivity : Activity() {
         fetchCategories()
         findViewById<Button>(R.id.btnAddCategory).setOnClickListener { addCategory() }
         etNewCategory.setOnEditorActionListener { _, _, _ -> addCategory(); true }
+
+        // ── Menu days ────────────────────────────────────────────────────────
+        layoutMenuDays = findViewById(R.id.layoutMenuDays)
+        val activeDays = Prefs.menuActiveDays(this).toMutableSet()
+        allDays.forEach { (dayId, dayName) ->
+            val cb = CheckBox(this).apply {
+                text = dayName
+                isChecked = dayId in activeDays
+                buttonTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+                setTextColor(getColor(R.color.text_primary))
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) activeDays.add(dayId) else activeDays.remove(dayId)
+                    Prefs.saveMenuActiveDays(this@SettingsActivity, activeDays.toList())
+                }
+            }
+            layoutMenuDays.addView(cb)
+        }
 
         // ── Calendar sync ────────────────────────────────────────────────────
         switchCalendar.isChecked = Prefs.calendarEnabled(this)

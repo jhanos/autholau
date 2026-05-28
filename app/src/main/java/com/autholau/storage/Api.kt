@@ -1,6 +1,9 @@
 package com.autholau.storage
 
 import com.autholau.model.Event
+import com.autholau.model.Ingredient
+import com.autholau.model.MenuAssignment
+import com.autholau.model.MenuRecipe
 import com.autholau.model.RecurringItem
 import com.autholau.model.ShoppingItem
 import org.json.JSONArray
@@ -163,6 +166,48 @@ object Api {
         delete("recurring/$id") in 200..299
     } catch (_: Exception) { false }
 
+    // ── Menus (recipes) ───────────────────────────────────────────────────────
+
+    fun getMenus(): List<MenuRecipe>? = try {
+        val (code, body) = get("menus")
+        if (code == 200) parseMenuList(body) else null
+    } catch (_: Exception) { null }
+
+    fun createMenu(r: MenuRecipe): MenuRecipe? = try {
+        val (code, body) = post("menus", menuToJson(r))
+        if (code == 201 || code == 200) parseMenu(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun updateMenu(r: MenuRecipe): MenuRecipe? = try {
+        val (code, body) = put("menus/${r.id}", menuToJson(r))
+        if (code == 200) parseMenu(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun deleteMenu(id: String): Boolean = try {
+        delete("menus/$id") in 200..299
+    } catch (_: Exception) { false }
+
+    // ── Menu plan (day assignments) ────────────────────────────────────────────
+
+    fun getMenuPlan(): List<MenuAssignment>? = try {
+        val (code, body) = get("menu-plan")
+        if (code == 200) parseAssignmentList(body) else null
+    } catch (_: Exception) { null }
+
+    fun createMenuAssignment(a: MenuAssignment): MenuAssignment? = try {
+        val (code, body) = post("menu-plan", assignmentToJson(a))
+        if (code == 201 || code == 200) parseAssignment(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun updateMenuAssignment(a: MenuAssignment): MenuAssignment? = try {
+        val (code, body) = put("menu-plan/${a.id}", assignmentToJson(a))
+        if (code == 200) parseAssignment(JSONObject(body)) else null
+    } catch (_: Exception) { null }
+
+    fun deleteMenuAssignment(id: String): Boolean = try {
+        delete("menu-plan/$id") in 200..299
+    } catch (_: Exception) { false }
+
     // ── JSON helpers ──────────────────────────────────────────────────────────
 
     private fun eventToJson(e: Event) = JSONObject().apply {
@@ -242,5 +287,66 @@ object Api {
     private fun parseRecurringList(body: String): List<RecurringItem> {
         val arr = JSONArray(body)
         return (0 until arr.length()).map { parseRecurring(arr.getJSONObject(it)) }
+    }
+
+    private fun menuToJson(r: MenuRecipe) = JSONObject().apply {
+        put("id",        r.id)
+        put("name",      r.name)
+        put("category",  r.category)
+        put("updatedAt", r.updatedAt)
+        val arr = JSONArray()
+        r.ingredients.forEach { ing ->
+            arr.put(JSONObject().apply {
+                put("name", ing.name)
+                if (ing.quantity != null) put("quantity", ing.quantity)
+            })
+        }
+        put("ingredients", arr)
+    }
+
+    private fun parseMenu(o: JSONObject): MenuRecipe {
+        val ingArr = o.optJSONArray("ingredients") ?: JSONArray()
+        val ingredients = (0 until ingArr.length()).map { i ->
+            val obj = ingArr.getJSONObject(i)
+            Ingredient(
+                name     = obj.getString("name"),
+                quantity = obj.optString("quantity", null).takeIf { !it.isNullOrEmpty() && it != "null" }
+            )
+        }
+        return MenuRecipe(
+            id          = o.getString("id"),
+            name        = o.getString("name"),
+            category    = o.optString("category", "plat").takeIf { it.isNotEmpty() && it != "null" } ?: "plat",
+            ingredients = ingredients,
+            updatedAt   = o.optLong("updatedAt", 0L)
+        )
+    }
+
+    private fun parseMenuList(body: String): List<MenuRecipe> {
+        val arr = JSONArray(body)
+        return (0 until arr.length()).map { parseMenu(arr.getJSONObject(it)) }
+    }
+
+    private fun assignmentToJson(a: MenuAssignment) = JSONObject().apply {
+        put("id",        a.id)
+        put("date",      a.date)
+        put("updatedAt", a.updatedAt)
+        if (a.platId       != null) put("platId",       a.platId)
+        if (a.fruitId      != null) put("fruitId",      a.fruitId)
+        if (a.oleagineuxId != null) put("oleagineuxId", a.oleagineuxId)
+    }
+
+    private fun parseAssignment(o: JSONObject) = MenuAssignment(
+        id           = o.getString("id"),
+        date         = o.getString("date"),
+        platId       = o.optString("platId",       null).takeIf { !it.isNullOrEmpty() && it != "null" },
+        fruitId      = o.optString("fruitId",      null).takeIf { !it.isNullOrEmpty() && it != "null" },
+        oleagineuxId = o.optString("oleagineuxId", null).takeIf { !it.isNullOrEmpty() && it != "null" },
+        updatedAt    = o.optLong("updatedAt", 0L)
+    )
+
+    private fun parseAssignmentList(body: String): List<MenuAssignment> {
+        val arr = JSONArray(body)
+        return (0 until arr.length()).map { parseAssignment(arr.getJSONObject(it)) }
     }
 }

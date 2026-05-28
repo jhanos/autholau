@@ -203,6 +203,98 @@ def delete_recurring(item_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Menus (recipes)
+# ---------------------------------------------------------------------------
+
+@app.route("/menus", methods=["GET"])
+@auth.require_auth
+def list_menus():
+    return jsonify(storage.get_menus()), 200
+
+
+@app.route("/menus", methods=["POST"])
+@auth.require_auth
+def create_menu():
+    data = request.get_json(silent=True)
+    if not data or not data.get("id") or not data.get("name"):
+        return jsonify({"error": "Missing required fields: id, name"}), 400
+    if storage.get_menu(data["id"]):
+        return jsonify({"error": "Menu already exists"}), 409
+    menu = storage.create_menu(data)
+    return jsonify(menu), 201
+
+
+@app.route("/menus/<menu_id>", methods=["PUT"])
+@auth.require_auth
+def update_menu(menu_id: str):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Missing body"}), 400
+    data["id"] = menu_id
+    result, accepted = storage.update_menu(menu_id, data)
+    if result is None:
+        result = storage.create_menu(data)
+        return jsonify(result), 201
+    if not accepted:
+        return jsonify(result), 409
+    return jsonify(result), 200
+
+
+@app.route("/menus/<menu_id>", methods=["DELETE"])
+@auth.require_auth
+def delete_menu(menu_id: str):
+    if not storage.delete_menu(menu_id):
+        return jsonify({"error": "Menu not found"}), 404
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
+# Menu plan (day assignments)
+# ---------------------------------------------------------------------------
+
+@app.route("/menu-plan", methods=["GET"])
+@auth.require_auth
+def list_menu_plan():
+    return jsonify(storage.get_menu_plan()), 200
+
+
+@app.route("/menu-plan", methods=["POST"])
+@auth.require_auth
+def create_menu_assignment():
+    data = request.get_json(silent=True)
+    if not data or not data.get("id") or not data.get("date"):
+        return jsonify({"error": "Missing required fields: id, date"}), 400
+    if storage.get_menu_assignment(data["id"]):
+        return jsonify({"error": "Assignment already exists"}), 409
+    assignment = storage.create_menu_assignment(data)
+    return jsonify(assignment), 201
+
+
+@app.route("/menu-plan/<assignment_id>", methods=["PUT"])
+@auth.require_auth
+def update_menu_assignment(assignment_id: str):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Missing body"}), 400
+    data["id"] = assignment_id
+    result, accepted = storage.update_menu_assignment(assignment_id, data)
+    if result is None:
+        result = storage.create_menu_assignment(data)
+        return jsonify(result), 201
+    if not accepted:
+        return jsonify(result), 409
+    return jsonify(result), 200
+
+
+@app.route("/menu-plan/<assignment_id>", methods=["DELETE"])
+@auth.require_auth
+def delete_menu_assignment(assignment_id: str):
+    if not storage.delete_menu_assignment(assignment_id):
+        return jsonify({"error": "Assignment not found"}), 404
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------
 
