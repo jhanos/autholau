@@ -597,6 +597,8 @@ class MainActivity : Activity() {
                                     Thread {
                                         val ok1 = Api.updateShoppingItem(updatedPrimary)
                                         val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+                                        if (ok1 == null) Prefs.addPendingUpdate(this@MainActivity, updatedPrimary)
+                                        if (updatedSibling != null && ok2 == null) Prefs.addPendingUpdate(this@MainActivity, updatedSibling)
                                         if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
                                     }.start()
                                 }
@@ -646,7 +648,10 @@ class MainActivity : Activity() {
                                         Thread {
                                             toReset.forEach { item ->
                                                 val ok = Api.updateShoppingItem(item)
-                                                if (ok == null) showSyncError()
+                                                if (ok == null) {
+                                                    Prefs.addPendingUpdate(this@MainActivity, item)
+                                                    showSyncError()
+                                                }
                                             }
                                         }.start()
                                     } else {
@@ -665,7 +670,10 @@ class MainActivity : Activity() {
                                         Thread {
                                             toRestore.forEach { item ->
                                                 val ok = Api.updateShoppingItem(item)
-                                                if (ok == null) showSyncError()
+                                                if (ok == null) {
+                                                    Prefs.addPendingUpdate(this@MainActivity, item)
+                                                    showSyncError()
+                                                }
                                             }
                                         }.start()
                                     }
@@ -712,7 +720,10 @@ class MainActivity : Activity() {
                                         Thread {
                                             toReset.forEach { item ->
                                                 val ok = Api.updateShoppingItem(item)
-                                                if (ok == null) showSyncError()
+                                                if (ok == null) {
+                                                    Prefs.addPendingUpdate(this@MainActivity, item)
+                                                    showSyncError()
+                                                }
                                             }
                                         }.start()
                                     } else {
@@ -732,7 +743,10 @@ class MainActivity : Activity() {
                                         Thread {
                                             toRestore.forEach { item ->
                                                 val ok = Api.updateShoppingItem(item)
-                                                if (ok == null) showSyncError()
+                                                if (ok == null) {
+                                                    Prefs.addPendingUpdate(this@MainActivity, item)
+                                                    showSyncError()
+                                                }
                                             }
                                         }.start()
                                     }
@@ -756,7 +770,10 @@ class MainActivity : Activity() {
                                     renderShopping()
                                     Thread {
                                         val ok = Api.updateShoppingItem(updated)
-                                        if (ok == null) showSyncError()
+                                        if (ok == null) {
+                                            Prefs.addPendingUpdate(this@MainActivity, updated)
+                                            showSyncError()
+                                        }
                                     }.start()
                                 }
                             }
@@ -1241,6 +1258,18 @@ class MainActivity : Activity() {
     private fun refresh() {
         btnRefresh.isEnabled = false
         Thread {
+            // Flush any offline-queued updates before fetching fresh data
+            val pending = Prefs.loadPendingUpdates(this)
+            if (pending.isNotEmpty()) {
+                val flushedIds = mutableListOf<String>()
+                pending.forEach { item ->
+                    if (Api.updateShoppingItem(item) != null) flushedIds.add(item.id)
+                }
+                if (flushedIds.isNotEmpty()) {
+                    Prefs.savePendingUpdates(this, pending.filter { it.id !in flushedIds })
+                }
+            }
+
             val newEvents     = Api.getEvents()
             val newShopping   = Api.getShopping()
             val newCategories = Api.getCategories()
@@ -1257,7 +1286,20 @@ class MainActivity : Activity() {
                     Thread { CalendarSync.syncAll(this, events) }.start()
                 }
                 if (newShopping != null) {
-                    shopping = newShopping
+                    // Re-apply any pending items that are still newer than the server version
+                    val stillPending = Prefs.loadPendingUpdates(this)
+                    shopping = if (stillPending.isEmpty()) {
+                        newShopping
+                    } else {
+                        val validPending = stillPending.filter { p ->
+                            val serverItem = newShopping.firstOrNull { it.id == p.id }
+                            serverItem == null || p.updatedAt > serverItem.updatedAt
+                        }
+                        Prefs.savePendingUpdates(this, validPending)
+                        newShopping.map { serverItem ->
+                            validPending.firstOrNull { it.id == serverItem.id } ?: serverItem
+                        }
+                    }
                     Prefs.saveShopping(this, shopping)
                 }
                 if (newCategories != null) {

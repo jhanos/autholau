@@ -22,6 +22,7 @@ object Prefs {
     const val CALENDAR_ROW_MAP  = "calendar_row_map"
     const val COURSE_MODE       = "course_mode"
     const val RECURRING_ITEMS   = "recurring_items"
+    const val PENDING_UPDATES   = "pending_updates"
 
     const val DEFAULT_URL  = "https://famille.thonis.fr"
     const val DEFAULT_LEAD = 7
@@ -230,6 +231,50 @@ object Prefs {
             }
             if (needsResave) saveRecurring(ctx, items)
             items
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Pending updates queue (offline resilience) ────────────────────────────
+
+    fun addPendingUpdate(ctx: Context, item: ShoppingItem) {
+        val current = loadPendingUpdates(ctx).toMutableList()
+        current.removeAll { it.id == item.id }
+        current.add(item)
+        savePendingUpdates(ctx, current)
+    }
+
+    fun savePendingUpdates(ctx: Context, items: List<ShoppingItem>) {
+        val arr = JSONArray()
+        items.forEach { s ->
+            arr.put(JSONObject().apply {
+                put("id",        s.id)
+                put("name",      s.name)
+                put("checked",   s.checked)
+                put("planned",   s.planned)
+                if (s.category != null) put("category", s.category)
+                put("store",     s.store)
+                put("updatedAt", s.updatedAt)
+            })
+        }
+        get(ctx).edit().putString(PENDING_UPDATES, arr.toString()).apply()
+    }
+
+    fun loadPendingUpdates(ctx: Context): List<ShoppingItem> {
+        val raw = get(ctx).getString(PENDING_UPDATES, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                ShoppingItem(
+                    id        = o.getString("id"),
+                    name      = o.getString("name"),
+                    checked   = o.optBoolean("checked", false),
+                    planned   = o.optBoolean("planned", false),
+                    category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() && it != "null" },
+                    store     = o.optString("store", "Leclerc").ifEmpty { "Leclerc" },
+                    updatedAt = o.optLong("updatedAt", 0L)
+                )
+            }
         } catch (_: Exception) { emptyList() }
     }
 
