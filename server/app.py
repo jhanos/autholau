@@ -101,6 +101,7 @@ def create_shopping_item():
     if storage.get_shopping_item(data["id"]):
         return jsonify({"error": "Item already exists"}), 409
     item = storage.create_shopping_item(data)
+    storage.backup_shopping()
     return jsonify(item), 201
 
 
@@ -116,6 +117,7 @@ def update_shopping_item(item_id: str):
         return jsonify({"error": "Item not found"}), 404
     if not accepted:
         return jsonify(result), 409
+    storage.backup_shopping()
     return jsonify(result), 200
 
 
@@ -124,6 +126,7 @@ def update_shopping_item(item_id: str):
 def delete_shopping_item(item_id: str):
     if not storage.delete_shopping_item(item_id):
         return jsonify({"error": "Item not found"}), 404
+    storage.backup_shopping()
     return "", 204
 
 
@@ -305,6 +308,7 @@ def admin_reseed():
     if data.get("password") != FAMILY_PASSWORD:
         return jsonify({"error": "Unauthorized"}), 401
     storage.reseed()
+    storage.backup_shopping()
     return jsonify({"status": "reseeded"}), 200
 
 

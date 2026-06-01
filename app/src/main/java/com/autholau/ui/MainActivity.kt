@@ -1145,7 +1145,7 @@ class MainActivity : Activity() {
         if (toCreate.isEmpty()) return
         shopping = shopping + toCreate
         Prefs.saveShopping(this, shopping)
-        renderShopping()
+        if (section != Section.MENUS && section != Section.RECETTES && section != Section.EVENTS) renderShopping()
         Thread {
             for (item in toCreate) {
                 val created = Api.createShoppingItem(item)
@@ -1280,9 +1280,14 @@ class MainActivity : Activity() {
         Thread {
             val created = Api.createShoppingItem(item)
             if (created != null) {
+                val pending = Prefs.loadPendingCreates(this).filter { it.id != item.id }
+                Prefs.savePendingCreates(this, pending)
                 shopping = shopping.map { if (it.id == item.id) created else it }
                 Prefs.saveShopping(this, shopping)
             } else {
+                val pending = Prefs.loadPendingCreates(this).toMutableList()
+                if (pending.none { it.id == item.id }) pending.add(item)
+                Prefs.savePendingCreates(this, pending)
                 showSyncError()
             }
         }.start()
@@ -1308,6 +1313,18 @@ class MainActivity : Activity() {
     private fun refresh() {
         btnRefresh.isEnabled = false
         Thread {
+            // Flush any offline-queued creates before fetching fresh data
+            val pendingCreates = Prefs.loadPendingCreates(this)
+            if (pendingCreates.isNotEmpty()) {
+                val flushedIds = mutableListOf<String>()
+                pendingCreates.forEach { item ->
+                    if (Api.createShoppingItem(item) != null) flushedIds.add(item.id)
+                }
+                if (flushedIds.isNotEmpty()) {
+                    Prefs.savePendingCreates(this, pendingCreates.filter { it.id !in flushedIds })
+                }
+            }
+
             // Flush any offline-queued updates before fetching fresh data
             val pending = Prefs.loadPendingUpdates(this)
             if (pending.isNotEmpty()) {
@@ -1338,9 +1355,9 @@ class MainActivity : Activity() {
                     Thread { CalendarSync.syncAll(this, events) }.start()
                 }
                 if (newShopping != null) {
-                    // Re-apply any pending items that are still newer than the server version
+                    // Re-apply pending updates still newer than the server version
                     val stillPending = Prefs.loadPendingUpdates(this)
-                    shopping = if (stillPending.isEmpty()) {
+                    val merged = if (stillPending.isEmpty()) {
                         newShopping
                     } else {
                         val validPending = stillPending.filter { p ->
@@ -1352,6 +1369,10 @@ class MainActivity : Activity() {
                             validPending.firstOrNull { it.id == serverItem.id } ?: serverItem
                         }
                     }
+                    // Re-append any creates not yet acknowledged by the server
+                    val stillPendingCreates = Prefs.loadPendingCreates(this)
+                    val serverIds = merged.map { it.id }.toSet()
+                    shopping = merged + stillPendingCreates.filter { it.id !in serverIds }
                     Prefs.saveShopping(this, shopping)
                 }
                 if (newCategories != null) {
@@ -1406,7 +1427,8 @@ class MainActivity : Activity() {
             )
         }
 
-        tvEmpty.visibility = View.GONE
+        tvEmpty.visibility  = View.GONE
+        listView.visibility = View.VISIBLE
 
         listView.adapter = object : BaseAdapter() {
             override fun getCount()          = rows.size
@@ -1456,7 +1478,8 @@ class MainActivity : Activity() {
         rows += RecetteRow.Header(getString(R.string.label_oleagineux))
         rows += oleagItems.map { RecetteRow.Item(it) }
 
-        tvEmpty.visibility = View.GONE
+        tvEmpty.visibility  = View.GONE
+        listView.visibility = View.VISIBLE
 
         listView.adapter = object : BaseAdapter() {
             private val TYPE_HEADER = 0

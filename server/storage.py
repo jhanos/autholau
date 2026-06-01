@@ -1,114 +1,27 @@
+import datetime
 import json
 import os
+import yaml
 from typing import Any
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
-DEFAULT_CATEGORIES = [
-    "Maison",
-    "Féculents",
-    "Condiments",
-    "Petit Dej/Gouter",
-    "Viandes/Poissons",
-    "Laitage",
-    "Fruits/Légumes",
-    "Hygiène/Beauté",
-    "Surgelés",
-]
 
-# (category, store, name) tuples — seeded into shopping.json on first access
-DEFAULT_SHOPPING_ITEMS = [
-    # Maison — Leclerc
-    ("Maison", "Leclerc", "Sel adoucisseur"),
-    ("Maison", "Leclerc", "Sac poubelle"),
-    ("Maison", "Leclerc", "Papier toilette"),
-    ("Maison", "Leclerc", "Sopalin"),
-    ("Maison", "Leclerc", "Film alimentaire"),
-    ("Maison", "Leclerc", "Piles"),
-    ("Maison", "Leclerc", "Lessive"),
-    ("Maison", "Leclerc", "Liquide vaisselle"),
-    ("Maison", "Leclerc", "Produit WC"),
-    ("Maison", "Leclerc", "Éponges"),
-    ("Maison", "Leclerc", "Papier aluminium"),
-    ("Maison", "Leclerc", "Vinaigre blanc"),
-    ("Maison", "Leclerc", "Litière Chat"),
-    ("Maison", "Leclerc", "Biscuit pour chat"),
-    ("Maison", "Leclerc", "Biscuits pour chien"),
-    # Féculents
-    ("Féculents", "Leclerc", "Pâtes"),
-    ("Féculents", "Leclerc", "Riz"),
-    ("Féculents", "Leclerc", "Semoule"),
-    ("Féculents", "Leclerc", "Pommes de terre"),
-    ("Féculents", "Leclerc", "Farine"),
-    ("Féculents", "Grand Frais", "Pain"),
-    # Condiments
-    ("Condiments", "Leclerc", "Huile d'olive"),
-    ("Condiments", "Leclerc", "Ketchup"),
-    # Petit Dej/Gouter — Leclerc
-    ("Petit Dej/Gouter", "Leclerc", "Café"),
-    ("Petit Dej/Gouter", "Leclerc", "Thé"),
-    ("Petit Dej/Gouter", "Leclerc", "Cacao"),
-    ("Petit Dej/Gouter", "Leclerc", "Compote"),
-    ("Petit Dej/Gouter", "Leclerc", "Confiture"),
-    ("Petit Dej/Gouter", "Leclerc", "Nocciolata"),
-    ("Petit Dej/Gouter", "Leclerc", "Biscuits gouter"),
-    ("Petit Dej/Gouter", "Leclerc", "Céréales"),
-    ("Petit Dej/Gouter", "Leclerc", "Pain tranché"),
-    # Viandes/Poissons — Leclerc
-    ("Viandes/Poissons", "Leclerc", "Poulet"),
-    ("Viandes/Poissons", "Leclerc", "Jambon"),
-    ("Viandes/Poissons", "Leclerc", "Saucisse"),
-    ("Viandes/Poissons", "Leclerc", "Poulet pané"),
-    ("Viandes/Poissons", "Leclerc", "Lardons"),
-    ("Viandes/Poissons", "Leclerc", "Lardons Saumon"),
-    ("Viandes/Poissons", "Leclerc", "Thon"),
-    # Laitage — Leclerc
-    ("Laitage", "Leclerc", "Lait"),
-    ("Laitage", "Leclerc", "Yaourt Augustine"),
-    ("Laitage", "Leclerc", "Gruyère"),
-    ("Laitage", "Leclerc", "Parmesan"),
-    ("Laitage", "Leclerc", "Oeufs"),
-    ("Laitage", "Leclerc", "Yaourt Thomas"),
-    ("Laitage", "Leclerc", "Yaourt Laura"),
-    ("Laitage", "Leclerc", "Beurre"),
-    ("Laitage", "Leclerc", "Petit beurre"),
-    ("Laitage", "Leclerc", "Kiri"),
-    ("Laitage", "Leclerc", "Skyr"),
-    ("Laitage", "Leclerc", "Lait Végétal"),
-    # Laitage — Grand Frais
-    ("Laitage", "Grand Frais", "Oeufs"),
-    ("Laitage", "Grand Frais", "Yaourt Chocolat"),
-    ("Laitage", "Grand Frais", "Yaourt trois chocolats"),
-    # Fruits/Légumes — Grand Frais
-    ("Fruits/Légumes", "Grand Frais", "Framboises"),
-    ("Fruits/Légumes", "Grand Frais", "Fraises"),
-    ("Fruits/Légumes", "Grand Frais", "Melons"),
-    ("Fruits/Légumes", "Grand Frais", "Tomates"),
-    ("Fruits/Légumes", "Grand Frais", "Salade"),
-    ("Fruits/Légumes", "Grand Frais", "Concombre"),
-    ("Fruits/Légumes", "Grand Frais", "Carottes"),
-    ("Fruits/Légumes", "Grand Frais", "Pommes"),
-    ("Fruits/Légumes", "Grand Frais", "Bananes"),
-    ("Fruits/Légumes", "Grand Frais", "Oranges"),
-    ("Fruits/Légumes", "Grand Frais", "Citrons"),
-    ("Fruits/Légumes", "Grand Frais", "Poivrons"),
-    ("Fruits/Légumes", "Grand Frais", "Pommes de terre"),
-    # Hygiène/Beauté — Leclerc
-    ("Hygiène/Beauté", "Leclerc", "Brosse à dents"),
-    ("Hygiène/Beauté", "Leclerc", "Dentifrice"),
-    ("Hygiène/Beauté", "Leclerc", "Shampoing"),
-    ("Hygiène/Beauté", "Leclerc", "Gel douche"),
-    ("Hygiène/Beauté", "Leclerc", "Coton-tiges"),
-    # Surgelés — Leclerc
-    ("Surgelés", "Leclerc", "Pizza"),
-    ("Surgelés", "Leclerc", "Frites"),
-    ("Surgelés", "Leclerc", "Nuggets"),
-    ("Surgelés", "Leclerc", "Glaces"),
-    ("Surgelés", "Leclerc", "Petits pois"),
-    ("Surgelés", "Leclerc", "Haricots verts"),
-    ("Surgelés", "Leclerc", "Poissons ronds"),
-    ("Surgelés", "Leclerc", "Poissons panés"),
-]
+def _load_defaults():
+    path = os.path.join(os.path.dirname(__file__), "categories.yaml")
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    categories = list(data.keys())
+    items = [
+        (cat, store, name)
+        for cat, stores in data.items()
+        for store, names in (stores or {}).items()
+        for name in (names or [])
+    ]
+    return categories, items
+
+
+DEFAULT_CATEGORIES, DEFAULT_SHOPPING_ITEMS = _load_defaults()
 
 
 def _path(filename: str) -> str:
@@ -401,3 +314,35 @@ def delete_menu_assignment(assignment_id: str) -> bool:
         return False
     _write("menu_plan.json", new_items)
     return True
+
+
+# ── Backup ────────────────────────────────────────────────────────────────────
+
+BACKUP_DIR = os.path.join(os.path.dirname(__file__), "data", "backups")
+
+
+def backup_shopping() -> None:
+    """Snapshot shopping.json as YAML (category→store→names); keep last 28 days."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    today = datetime.date.today().isoformat()
+    path  = os.path.join(BACKUP_DIR, f"categories_{today}.yaml")
+
+    data: dict = {}
+    for item in get_shopping():
+        cat   = item.get("category") or "Sans catégorie"
+        store = item.get("store", "Leclerc")
+        data.setdefault(cat, {}).setdefault(store, []).append(item["name"])
+
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+
+    cutoff = datetime.date.today() - datetime.timedelta(days=28)
+    for fname in os.listdir(BACKUP_DIR):
+        if not (fname.startswith("categories_") and fname.endswith(".yaml")):
+            continue
+        try:
+            file_date = datetime.date.fromisoformat(fname[len("categories_"):-len(".yaml")])
+            if file_date < cutoff:
+                os.remove(os.path.join(BACKUP_DIR, fname))
+        except ValueError:
+            pass
