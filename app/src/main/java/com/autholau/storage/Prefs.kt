@@ -26,6 +26,7 @@ object Prefs {
     const val COURSE_MODE       = "course_mode"
     const val RECURRING_ITEMS   = "recurring_items"
     const val PENDING_UPDATES   = "pending_updates"
+    const val PENDING_CREATES   = "pending_creates"
     const val MENUS_CACHE       = "menus_cache"
     const val MENU_PLAN_CACHE   = "menu_plan_cache"
     const val MENU_ACTIVE_DAYS  = "menu_active_days"
@@ -270,6 +271,43 @@ object Prefs {
 
     fun loadPendingUpdates(ctx: Context): List<ShoppingItem> {
         val raw = get(ctx).getString(PENDING_UPDATES, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                ShoppingItem(
+                    id        = o.getString("id"),
+                    name      = o.getString("name"),
+                    checked   = o.optBoolean("checked", false),
+                    planned   = o.optBoolean("planned", false),
+                    category  = o.optString("category", null).takeIf { !it.isNullOrEmpty() && it != "null" },
+                    store     = o.optString("store", "Leclerc").ifEmpty { "Leclerc" },
+                    updatedAt = o.optLong("updatedAt", 0L)
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Pending creates queue (offline resilience) ───────────────────────────
+
+    fun savePendingCreates(ctx: Context, items: List<ShoppingItem>) {
+        val arr = JSONArray()
+        items.forEach { s ->
+            arr.put(JSONObject().apply {
+                put("id",        s.id)
+                put("name",      s.name)
+                put("checked",   s.checked)
+                put("planned",   s.planned)
+                if (s.category != null) put("category", s.category)
+                put("store",     s.store)
+                put("updatedAt", s.updatedAt)
+            })
+        }
+        get(ctx).edit().putString(PENDING_CREATES, arr.toString()).apply()
+    }
+
+    fun loadPendingCreates(ctx: Context): List<ShoppingItem> {
+        val raw = get(ctx).getString(PENDING_CREATES, null) ?: return emptyList()
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).map { i ->

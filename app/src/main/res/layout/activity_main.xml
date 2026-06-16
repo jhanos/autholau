@@ -239,6 +239,8 @@
             android:textSize="16sp"
             android:gravity="center_vertical"
             android:paddingStart="32dp"
+            android:drawableStart="@drawable/ic_cart"
+            android:drawablePadding="8dp"
             android:visibility="gone"
             android:background="?android:attr/selectableItemBackground"/>
 
