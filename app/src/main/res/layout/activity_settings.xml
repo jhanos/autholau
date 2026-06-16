@@ -236,6 +236,31 @@
             android:layout_marginTop="8dp"
             android:visibility="gone"/>
 
+        <LinearLayout
+            android:id="@+id/layoutCalendarReminders"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/label_calendar_reminders"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"/>
+
+            <Switch
+                android:id="@+id/switchCalendarReminders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:thumbTint="@color/primary"
+                android:trackTint="@color/surface"/>
+        </LinearLayout>
+
         <!-- ── Divider ────────────────────────────────────────────────────── -->
 
         <View

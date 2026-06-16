@@ -20,9 +20,10 @@ object Prefs {
     const val EVENTS_CACHE      = "events_cache"
     const val SHOPPING_CACHE    = "shopping_cache"
     const val CATEGORIES_CACHE  = "categories_cache"
-    const val CALENDAR_ENABLED  = "calendar_enabled"
-    const val CALENDAR_ID       = "calendar_id"
-    const val CALENDAR_ROW_MAP  = "calendar_row_map"
+    const val CALENDAR_ENABLED   = "calendar_enabled"
+    const val CALENDAR_ID        = "calendar_id"
+    const val CALENDAR_ROW_MAP   = "calendar_row_map"
+    const val CALENDAR_REMINDERS = "calendar_reminders"
     const val COURSE_MODE       = "course_mode"
     const val RECURRING_ITEMS   = "recurring_items"
     const val PENDING_UPDATES   = "pending_updates"
@@ -78,6 +79,12 @@ object Prefs {
 
     fun saveCalendarEnabled(ctx: Context, enabled: Boolean) =
         get(ctx).edit().putBoolean(CALENDAR_ENABLED, enabled).apply()
+
+    fun calendarReminders(ctx: Context): Boolean =
+        get(ctx).getBoolean(CALENDAR_REMINDERS, true)
+
+    fun saveCalendarReminders(ctx: Context, enabled: Boolean) =
+        get(ctx).edit().putBoolean(CALENDAR_REMINDERS, enabled).apply()
 
     fun calendarId(ctx: Context): Long =
         get(ctx).getLong(CALENDAR_ID, -1L)

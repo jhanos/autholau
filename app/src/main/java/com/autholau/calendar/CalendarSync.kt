@@ -268,7 +268,11 @@ object CalendarSync {
     private fun insert(ctx: Context, calendarId: Long, event: Event): Long? {
         val values = eventToValues(event, calendarId)
         val uri: Uri? = ctx.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-        return uri?.lastPathSegment?.toLongOrNull()
+        val rowId = uri?.lastPathSegment?.toLongOrNull()
+        if (rowId != null && Prefs.calendarReminders(ctx)) {
+            insertReminders(ctx, rowId)
+        }
+        return rowId
     }
 
     private fun update(ctx: Context, rowId: Long, event: Event) {
@@ -280,5 +284,25 @@ object CalendarSync {
             arrayOf(rowId.toString())
         )
         log("update — $rows ligne(s) modifiée(s)")
+        ctx.contentResolver.delete(
+            CalendarContract.Reminders.CONTENT_URI,
+            "${CalendarContract.Reminders.EVENT_ID} = ?",
+            arrayOf(rowId.toString())
+        )
+        if (Prefs.calendarReminders(ctx)) {
+            insertReminders(ctx, rowId)
+        }
+    }
+
+    private fun insertReminders(ctx: Context, eventRowId: Long) {
+        for (minutes in intArrayOf(30, 24 * 60)) {
+            val rv = ContentValues().apply {
+                put(CalendarContract.Reminders.EVENT_ID, eventRowId)
+                put(CalendarContract.Reminders.MINUTES,  minutes)
+                put(CalendarContract.Reminders.METHOD,   CalendarContract.Reminders.METHOD_ALERT)
+            }
+            ctx.contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, rv)
+        }
+        log("Rappels insérés pour rowId=$eventRowId (30 min + 1 jour)")
     }
 }

@@ -23,11 +23,13 @@ class SettingsActivity : Activity() {
     private lateinit var etNewCategory:   EditText
     private lateinit var tvCatError:      TextView
     private lateinit var switchCourseMode: Switch
-    private lateinit var switchCalendar:  Switch
-    private lateinit var tvCalendarLabel: TextView
-    private lateinit var spinnerCalendar: Spinner
-    private lateinit var tvCalendarError: TextView
-    private lateinit var layoutMenuDays:  LinearLayout
+    private lateinit var switchCalendar:          Switch
+    private lateinit var tvCalendarLabel:         TextView
+    private lateinit var spinnerCalendar:         Spinner
+    private lateinit var tvCalendarError:         TextView
+    private lateinit var layoutCalendarReminders: LinearLayout
+    private lateinit var switchCalendarReminders: Switch
+    private lateinit var layoutMenuDays:          LinearLayout
     private var categories: MutableList<String> = mutableListOf()
 
     private val allDays = listOf(
@@ -56,10 +58,12 @@ class SettingsActivity : Activity() {
         etNewCategory   = findViewById(R.id.etNewCategory)
         tvCatError      = findViewById(R.id.tvCatError)
         switchCourseMode = findViewById(R.id.switchCourseMode)
-        switchCalendar  = findViewById(R.id.switchCalendar)
-        tvCalendarLabel = findViewById(R.id.tvCalendarLabel)
-        spinnerCalendar = findViewById(R.id.spinnerCalendar)
-        tvCalendarError = findViewById(R.id.tvCalendarError)
+        switchCalendar          = findViewById(R.id.switchCalendar)
+        tvCalendarLabel         = findViewById(R.id.tvCalendarLabel)
+        spinnerCalendar         = findViewById(R.id.spinnerCalendar)
+        tvCalendarError         = findViewById(R.id.tvCalendarError)
+        layoutCalendarReminders = findViewById(R.id.layoutCalendarReminders)
+        switchCalendarReminders = findViewById(R.id.switchCalendarReminders)
 
         etUrl.setText(Prefs.serverUrl(this))
 
@@ -148,6 +152,12 @@ class SettingsActivity : Activity() {
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
 
+        // ── Calendar reminders ───────────────────────────────────────────────
+        switchCalendarReminders.isChecked = Prefs.calendarReminders(this)
+        switchCalendarReminders.setOnCheckedChangeListener { _, isChecked ->
+            Prefs.saveCalendarReminders(this, isChecked)
+        }
+
         // ── Debug logs ───────────────────────────────────────────────────────
         findViewById<Button>(R.id.btnShowCalendarLogs).setOnClickListener { showCalendarLogs() }
     }
@@ -209,8 +219,9 @@ class SettingsActivity : Activity() {
 
     private fun updateCalendarSectionVisibility() {
         val visible = switchCalendar.isChecked
-        tvCalendarLabel.visibility  = if (visible) View.VISIBLE else View.GONE
-        spinnerCalendar.visibility  = if (visible) View.VISIBLE else View.GONE
+        tvCalendarLabel.visibility          = if (visible) View.VISIBLE else View.GONE
+        spinnerCalendar.visibility          = if (visible) View.VISIBLE else View.GONE
+        layoutCalendarReminders.visibility  = if (visible) View.VISIBLE else View.GONE
     }
 
     // ── Category helpers ──────────────────────────────────────────────────────
