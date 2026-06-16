@@ -1,16 +1,14 @@
 import jwt
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import wraps
 from flask import request, jsonify
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
-JWT_EXPIRY_DAYS = 30
 
 
 def generate_token() -> str:
     payload = {
-        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -20,8 +18,6 @@ def verify_token(token: str) -> bool:
     try:
         jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         return True
-    except jwt.ExpiredSignatureError:
-        return False
     except jwt.InvalidTokenError:
         return False
 
