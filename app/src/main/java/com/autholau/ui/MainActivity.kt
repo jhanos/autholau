@@ -965,8 +965,8 @@ class MainActivity : Activity() {
                         val wantLeclerc    = cbL?.isChecked ?: false
                         val wantGrandFrais = cbG?.isChecked ?: false
                         if (!wantLeclerc && !wantGrandFrais) return@setPositiveButton
-                        if (wantLeclerc)    createShoppingItem(itemName, cat, "Leclerc")
-                        if (wantGrandFrais) createShoppingItem(itemName, cat, "Grand Frais")
+                        if (wantLeclerc)    createShoppingItem(itemName, cat, "Leclerc",     planned = isListe)
+                        if (wantGrandFrais) createShoppingItem(itemName, cat, "Grand Frais", planned = isListe)
                     }
 
                     else -> {
@@ -1058,15 +1058,16 @@ class MainActivity : Activity() {
 
     private fun showChangeStoreDialog(item: ShoppingItem, sibling: ShoppingItem?) {
         if (section == Section.LISTE) {
-            val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_change_store), getString(R.string.action_recurrence), getString(R.string.action_delete))
+            val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_change_category), getString(R.string.action_change_store), getString(R.string.action_recurrence), getString(R.string.action_delete))
             AlertDialog.Builder(this)
                 .setTitle(item.name)
                 .setItems(options) { _, idx ->
                     when (idx) {
                         0 -> showRenameListeItemDialog(item, sibling)
-                        1 -> showStorePicker(item, sibling)
-                        2 -> showRecurrenceDialog(item, sibling)
-                        3 -> {
+                        1 -> showChangeCategoryDialog(item, sibling)
+                        2 -> showStorePicker(item, sibling)
+                        3 -> showRecurrenceDialog(item, sibling)
+                        4 -> {
                             val idsToDelete = listOfNotNull(item.id, sibling?.id).toSet()
                             shopping = shopping.filter { it.id !in idsToDelete }
                             Prefs.saveShopping(this, shopping)
@@ -1084,6 +1085,34 @@ class MainActivity : Activity() {
             return
         }
         showStorePicker(item, null)
+    }
+
+    private fun showChangeCategoryDialog(item: ShoppingItem, sibling: ShoppingItem?) {
+        val catOptions = arrayOf(getString(R.string.category_none)) + categories.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_change_category))
+            .setItems(catOptions) { _, idx ->
+                val newCat = if (idx == 0) null else categories[idx - 1]
+                if (newCat == item.category) return@setItems
+                val ts = System.currentTimeMillis()
+                val updatedPrimary = item.copy(category = newCat, updatedAt = ts)
+                val updatedSibling = sibling?.copy(category = newCat, updatedAt = ts)
+                shopping = shopping.map { s ->
+                    when (s.id) {
+                        updatedPrimary.id  -> updatedPrimary
+                        updatedSibling?.id -> updatedSibling
+                        else               -> s
+                    }
+                }
+                Prefs.saveShopping(this, shopping)
+                renderShopping()
+                Thread {
+                    val ok1 = Api.updateShoppingItem(updatedPrimary)
+                    val ok2 = updatedSibling?.let { Api.updateShoppingItem(it) }
+                    if (ok1 == null || (updatedSibling != null && ok2 == null)) showSyncError()
+                }.start()
+            }
+            .show()
     }
 
     private fun showStorePicker(item: ShoppingItem, sibling: ShoppingItem?) {
@@ -1264,12 +1293,12 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun createShoppingItem(name: String, category: String?, store: String) {
+    private fun createShoppingItem(name: String, category: String?, store: String, planned: Boolean = false) {
         val item = ShoppingItem(
             id        = java.util.UUID.randomUUID().toString(),
             name      = name,
             checked   = false,
-            planned   = false,
+            planned   = planned,
             category  = category,
             store     = store,
             updatedAt = System.currentTimeMillis()
