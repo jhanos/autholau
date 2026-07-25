@@ -6,7 +6,10 @@
       "Bash(/opt/gradle/gradle-8.4/bin/gradle assembleRelease -x lint --project-dir /home/jhanos/git/perso/autholau -Dhttp.proxyHost=172.23.194.209 -Dhttp.proxyPort=43051 -Dhttps.proxyHost=172.23.194.209 -Dhttps.proxyPort=43051)",
       "Bash(rtk *)",
       "Bash(/opt/gradle/gradle-8.4/bin/gradle compileReleaseKotlin --project-dir /home/jhanos/git/perso/autholau -Dhttp.proxyHost=172.23.194.209 -Dhttp.proxyPort=43051 -Dhttps.proxyHost=172.23.194.209 -Dhttps.proxyPort=43051)",
-      "Bash(/opt/gradle/gradle-8.4/bin/gradle *)"
+      "Bash(/opt/gradle/gradle-8.4/bin/gradle *)",
+      "Bash(xargs -I{} basename {})",
+      "Bash(git -C /home/jhanos/git/perso/autholau show 4329092 --stat)",
+      "Bash(git -C /home/jhanos/git/perso/autholau show 4329092)"
     ]
   }
 }
