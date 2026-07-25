@@ -29,7 +29,7 @@ class MainActivity : Activity() {
 
     private enum class Section { EVENTS, LISTE, COURSE, LECLERC, GRAND_FRAIS, AUTRE, MENUS, RECETTES }
 
-    private var section = Section.EVENTS
+    private var section = Section.LISTE
 
     // Views
     private lateinit var drawerPanel:      View
