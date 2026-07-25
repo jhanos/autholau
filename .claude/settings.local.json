@@ -10,6 +10,14 @@
       "Bash(xargs -I{} basename {})",
       "Bash(git -C /home/jhanos/git/perso/autholau show 4329092 --stat)",
       "Bash(git -C /home/jhanos/git/perso/autholau show 4329092)"
+      "Read(//opt/gradle/gradle-8.4/lib/**)",
+      "Read(//opt/gradle/gradle-8.4/**)",
+      "Bash(java -version)",
+      "Read(//usr/lib/jvm/**)",
+      "Bash(mkdir -p /home/jhanos/.gradle)",
+      "Bash(export GRADLE_USER_HOME=/home/jhanos/.gradle)",
+      "Bash(curl -s --proxy http://172.23.194.209:43051 https://plugins.gradle.org)",
+      "Bash(xargs cat)"
     ]
   }
 }
